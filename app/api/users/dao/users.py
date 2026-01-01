@@ -78,10 +78,27 @@ class UserDAO:
             Optional[User]: User instance if found, None otherwise.
         """
         try:
-            result = await self._session.execute(select(User).where(User.email == email))
+            result = await self._session.execute(
+                select(User).where(User.email == email)
+            )
             return result.scalar_one_or_none()
         except Exception as e:
             logger.error(f"Exception occurred while getting user by email: {e}")
+            raise e
+
+    # Remove
+    async def get_all(self) -> list[User]:
+        """
+        Get all users.
+
+        Returns:
+            list[User]: List of all user instances.
+        """
+        try:
+            result = await self._session.execute(select(User))
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"Exception occurred while getting all users: {e}")
             raise e
 
 

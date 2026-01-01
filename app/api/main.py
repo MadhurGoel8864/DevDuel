@@ -18,4 +18,9 @@ async def db_check(db: AsyncSession = Depends(get_db)):
     return {"db": result.scalar()}
 
 
+@api_router.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+
 api_router.include_router(users_router)

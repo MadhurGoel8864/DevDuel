@@ -1,12 +1,15 @@
 """User Service Layer"""
 
 from typing import Optional
-
+import logging
 from fastapi import Depends, Request
 
 from app.api.users.dao.users import UserDAO, get_user_dao
 from app.api.users.schemas.users import UserCreateData
 from app.database.models.users import User
+from app.core.exceptions import UserNotFoundException, UserAlreadyExistsException
+
+logger = logging.getLogger(__name__)
 
 
 class UserService:
@@ -40,10 +43,12 @@ class UserService:
         Raises:
             ValueError: If user with email already exists.
         """
+
         # Business logic: Check if user already exists
+        logger.info(f"Checking if user with email {user_data.email} already exists")
         existing_user = await self._user_dao.get_by_email(email=user_data.email)
         if existing_user:
-            raise ValueError(f"User with email {user_data.email} already exists")
+            raise UserAlreadyExistsException(email=user_data.email)
 
         # Delegate to DAO
         return await self._user_dao.create(
@@ -60,7 +65,23 @@ class UserService:
         Returns:
             Optional[User]: User instance if found, None otherwise.
         """
-        return await self._user_dao.get_by_id(user_id)
+        logger.info(f"Retrieving user with id {user_id}")
+        user = await self._user_dao.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundException(user_id=user_id)
+        return user
+
+    # Remove
+    async def get_all_users(self) -> list[User]:
+        """
+        Get all users.
+        For carpooling: Retrieves all registered users.
+
+        Returns:
+            list[User]: List of all user instances.
+        """
+        logger.info("Retrieving all users")
+        return await self._user_dao.get_all()
 
 
 async def get_user_service(

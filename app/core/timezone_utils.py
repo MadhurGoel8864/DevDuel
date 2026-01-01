@@ -51,7 +51,7 @@ def convert_to_ist(dt: datetime | None) -> datetime | None:
 
 class ISTDatetimeMixin:
     """Mixin to automatically convert all datetime fields to IST timezone.
-    
+
     Add this mixin to any Pydantic model to ensure all datetime fields
     are automatically converted to IST timezone without needing field serializers.
     """

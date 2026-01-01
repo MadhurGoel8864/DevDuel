@@ -1,15 +1,17 @@
 """User API Schemas"""
 
 from datetime import datetime
-from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
+from app.core.responses import APIResponse
 from app.core.timezone_utils import ISTDatetimeMixin
 
 
 class BaseSchema(BaseModel):
-    """Base schema with common configuration"""
+    """
+    Base schema with common configuration.
+    """
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -18,32 +20,34 @@ class BaseSchema(BaseModel):
 
 
 class BaseRequestSchema(BaseSchema):
-    """Base schema for all request schemas"""
-
-    pass
-
-
-class BaseResponseSchema(BaseSchema, ISTDatetimeMixin):
-    """Base schema for all response schemas with automatic IST timezone conversion"""
+    """
+    Base schema for all request schemas.
+    """
 
     pass
 
 
 class UserCreateData(BaseSchema):
-    """Data schema for creating a user"""
+    """
+    Data schema for creating a user.
+    """
 
     email: EmailStr
     full_name: str
 
 
 class UserCreateRequest(BaseRequestSchema):
-    """Request schema for creating a user"""
+    """
+    Request schema for creating a user.
+    """
 
     data: UserCreateData
 
 
 class UserBaseData(BaseSchema):
-    """Base user data schema with common fields"""
+    """
+    Base user data schema with common fields.
+    """
 
     id: str
     email: EmailStr
@@ -52,24 +56,33 @@ class UserBaseData(BaseSchema):
 
 
 class UserCreateResponseData(UserBaseData, ISTDatetimeMixin):
-    """Response data schema for user creation"""
+    """
+    Response data for user creation.
+    """
 
     created_at: datetime
 
 
 class UserGetResponseData(UserBaseData, ISTDatetimeMixin):
-    """Response data schema for getting a user"""
+    """
+    Response data for getting a user.
+    """
 
     created_at: datetime
     updated_at: datetime
 
-class UserCreateResponse(BaseResponseSchema):
-    """Response schema for user creation"""
+# Remove
+class UserListResponseData(UserBaseData, ISTDatetimeMixin):
+    """
+    Response data for listing users.
+    """
 
-    data: UserCreateResponseData
+    created_at: datetime
+    updated_at: datetime
 
 
-class UserGetResponse(BaseResponseSchema):
-    """Response schema for getting a user"""
-
-    data: UserGetResponseData
+# Final response aliases
+UserCreateResponse = APIResponse[UserCreateResponseData]
+UserGetResponse = APIResponse[UserGetResponseData]
+# Remove
+UserListResponse = APIResponse[list[UserListResponseData]]
