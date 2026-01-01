@@ -31,25 +31,43 @@ class ColoredFormatter(logging.Formatter):
         return log_message
 
 
-def setup_logging():
-    """Set up colored logging for the application."""
-    log_level = logging.INFO
-    log_format = "%(asctime)s [%(levelname)-2s] [%(name)s] %(message)s"
-    date_format = "%Y-%m-%d %H:%M:%S"
+class SafeExtraFormatter(ColoredFormatter):
+    def format(self, record):
+        for field in (
+            "request_id",
+            "method",
+            "path",
+            "status_code",
+            "duration_ms",
+        ):
+            if not hasattr(record, field):
+                setattr(record, field, "-")
+        return super().format(record)
 
-    # Use basicConfig to set the root logger, but without handlers
-    logging.basicConfig(
-        level=log_level, format=log_format, datefmt=date_format, stream=sys.stdout
+
+def setup_logging():
+    log_level = logging.INFO
+
+    log_format = (
+        "%(asctime)s [%(levelname)-2s] [%(name)s] %(message)s | "
+        "method=%(method)s path=%(path)s status=%(status_code)s "
+        "duration_ms=%(duration_ms)s request_id=%(request_id)s"
     )
 
-    formatter = ColoredFormatter(log_format, date_format)
-    logging.getLogger().handlers[0].setFormatter(formatter)
+    date_format = "%Y-%m-%d %H:%M:%S"
 
-    # Get the SQLAlchemy logger and configure it.
-    # When need detailed logging
-    # sql_logger = getLogger("sqlalchemy.engine")
-    # sql_logger.propagate = True
-    # sql_logger.setLevel(logging.INFO)
+    logging.basicConfig(
+        level=log_level,
+        format=log_format,
+        datefmt=date_format,
+        stream=sys.stdout,
+    )
+
+    formatter = SafeExtraFormatter(log_format, date_format)
+    root_logger = logging.getLogger()
+    root_logger.handlers[0].setFormatter(formatter)
+
+    # SQLAlchemy logging
     sql_logger = logging.getLogger("sqlalchemy.engine")
     sql_logger.setLevel(logging.WARNING)
     sql_logger.propagate = False

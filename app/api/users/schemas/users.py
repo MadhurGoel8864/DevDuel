@@ -71,6 +71,7 @@ class UserGetResponseData(UserBaseData, ISTDatetimeMixin):
     created_at: datetime
     updated_at: datetime
 
+
 # Remove
 class UserListResponseData(UserBaseData, ISTDatetimeMixin):
     """
