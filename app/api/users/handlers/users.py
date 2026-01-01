@@ -1,6 +1,6 @@
 """User Handler Layer"""
 
-from fastapi import Body, Depends, HTTPException, Path
+from fastapi import Body, Depends, Path
 
 from app.api.users.schemas.users import (
     UserCreateRequest,
@@ -8,6 +8,8 @@ from app.api.users.schemas.users import (
     UserCreateResponseData,
     UserGetResponse,
     UserGetResponseData,
+    UserListResponse,
+    UserListResponseData,
 )
 from app.api.users.services.users import UserService, get_user_service
 
@@ -20,15 +22,8 @@ async def create_user_handler(
     Handle user creation request.
     For carpooling: Creates a new user (rider, driver, or admin).
     """
-    try:
-        user = await user_service.create_user(request.data)
-        return UserCreateResponse(data=UserCreateResponseData.model_validate(user))
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        # Log the error in production
-        raise HTTPException(status_code=500, detail=f"Internal server error, {e}")
+    user = await user_service.create_user(request.data)
+    return UserCreateResponse(data=UserCreateResponseData.model_validate(user))
 
 
 async def get_user_handler(
@@ -40,7 +35,18 @@ async def get_user_handler(
     For carpooling: Retrieves user profile information.
     """
     user = await user_service.get_user_by_id(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
     return UserGetResponse(data=UserGetResponseData.model_validate(user))
+
+
+# Remove
+async def get_users_handler(
+    user_service: UserService = Depends(get_user_service),
+) -> UserListResponse:
+    """
+    Handle get users list request.
+    For carpooling: Retrieves all registered users.
+    """
+    users = await user_service.get_all_users()
+    return UserListResponse(
+        data=[UserListResponseData.model_validate(user) for user in users]
+    )

@@ -22,13 +22,6 @@ help:
 install:
 	poetry install
 
-dev:
-	poetry run uvicorn $(APP_MODULE) --reload --host $(HOST) --port $(PORT)
-
-.PHONY: run
-run:
-	poetry run uvicorn $(APP_MODULE) --host $(HOST) --port $(PORT)
-
 
 migrate:
 	poetry run alembic upgrade head
