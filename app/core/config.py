@@ -13,6 +13,17 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 30
 
+    # JWT Configuration
+    jwt_secret_key: str | None = Field(
+        default=None
+    )  # Falls back to secret_key if not set
+    jwt_algorithm: str = Field(default="HS256")
+
+    @property
+    def effective_jwt_secret(self) -> str:
+        """Return jwt_secret_key if set, otherwise fall back to secret_key."""
+        return self.jwt_secret_key or self.secret_key
+
     # Timezone
     timezone: str = Field(default="Asia/Kolkata")
 

@@ -42,6 +42,7 @@ class UserAlreadyExistsException(AppException):
     """
 
     def __init__(self, email: Optional[str] = None, message: Optional[str] = None):
+
         details = {"email": email} if email else None
         super().__init__(
             code="USER_ALREADY_EXISTS",

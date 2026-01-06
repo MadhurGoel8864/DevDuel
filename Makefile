@@ -49,7 +49,7 @@ clean:
 
 
 type-check:
-	poetry run mypy
+	poetry run mypy .
 
 
 .PHONY: rollback

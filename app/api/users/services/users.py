@@ -8,6 +8,7 @@ from app.api.users.dao.users import UserDAO, get_user_dao
 from app.api.users.schemas.users import UserCreateData
 from app.database.models.users import User
 from app.core.exceptions import UserNotFoundException, UserAlreadyExistsException
+from app.core.security.password import hash_password
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +51,17 @@ class UserService:
         if existing_user:
             raise UserAlreadyExistsException(email=user_data.email)
 
+        # Hash the password before storing
+        password_hash = hash_password(user_data.password)
+
         # Delegate to DAO
         return await self._user_dao.create(
-            email=user_data.email, full_name=user_data.full_name
+            email=user_data.email,
+            full_name=user_data.full_name,
+            password_hash=password_hash,
         )
 
-    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+    async def get_user_by_id(self, user_id: str) -> Optional[User]:
         """
         Get user by ID.
 

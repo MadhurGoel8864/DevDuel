@@ -34,6 +34,7 @@ class UserCreateData(BaseSchema):
 
     email: EmailStr
     full_name: str
+    password: str
 
 
 class UserCreateRequest(BaseRequestSchema):
