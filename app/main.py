@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi import HTTPException
-
+from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
 from app.api.main import api_router
 from app.core.config import settings
 from app.core.exception_handlers import (
@@ -13,10 +13,6 @@ from app.core.exception_handlers import (
 )
 from app.core.exceptions.base import AppException
 from app.core.logging import setup_logging
-
-app = FastAPI(title=settings.app_name)
-
-app.include_router(api_router)
 
 
 def create_app() -> FastAPI:
@@ -41,6 +37,9 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
+
+    app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(RequestLoggingMiddleware)
 
     # Register routers
     app.include_router(api_router)

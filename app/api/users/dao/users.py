@@ -25,13 +25,14 @@ class UserDAO:
         """
         self._session = session
 
-    async def create(self, email: str, full_name: str) -> User:
+    async def create(self, email: str, full_name: str, password_hash: str) -> User:
         """
         Create a new user in the database.
 
         Args:
             email (str): User's email address.
             full_name (str): User's full name.
+            password_hash (str): Hashed password for the user.
 
         Returns:
             User: The created user instance.
@@ -40,7 +41,7 @@ class UserDAO:
             Exception: If database operation fails.
         """
         try:
-            user = User(email=email, full_name=full_name)
+            user = User(email=email, full_name=full_name, password_hash=password_hash)
             self._session.add(user)
             await self._session.commit()
             await self._session.refresh(user)
@@ -50,7 +51,7 @@ class UserDAO:
             logger.error(f"Exception occurred while creating user: {e}")
             raise e
 
-    async def get_by_id(self, user_id: int) -> Optional[User]:
+    async def get_by_id(self, user_id: str) -> Optional[User]:
         """
         Get user by ID.
 

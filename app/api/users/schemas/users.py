@@ -34,6 +34,7 @@ class UserCreateData(BaseSchema):
 
     email: EmailStr
     full_name: str
+    password: str
 
 
 class UserCreateRequest(BaseRequestSchema):
@@ -70,6 +71,7 @@ class UserGetResponseData(UserBaseData, ISTDatetimeMixin):
 
     created_at: datetime
     updated_at: datetime
+
 
 # Remove
 class UserListResponseData(UserBaseData, ISTDatetimeMixin):

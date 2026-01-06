@@ -69,3 +69,71 @@ class InvalidTokenException(AppException):
             status_code=401,
             details=details,
         )
+
+
+class AuthenticationRequiredException(AppException):
+    """
+    Raised when authentication credentials are required but not provided.
+
+    HTTP Status: 401 Unauthorized
+    Error Code: AUTHENTICATION_REQUIRED
+
+    Example:
+        raise AuthenticationRequiredException()
+    """
+
+    def __init__(
+        self, message: str = "Authentication required", details: Optional[dict] = None
+    ):
+        super().__init__(
+            code="AUTHENTICATION_REQUIRED",
+            message=message,
+            status_code=401,
+            details=details,
+        )
+
+
+class InvalidAccessTokenException(AppException):
+    """
+    Raised when access token is invalid or expired.
+
+    HTTP Status: 401 Unauthorized
+    Error Code: INVALID_ACCESS_TOKEN
+
+    Example:
+        raise InvalidAccessTokenException()
+    """
+
+    def __init__(
+        self,
+        message: str = "Invalid or expired access token",
+        details: Optional[dict] = None,
+    ):
+        super().__init__(
+            code="INVALID_ACCESS_TOKEN",
+            message=message,
+            status_code=401,
+            details=details,
+        )
+
+
+class InvalidTokenTypeException(AppException):
+    """
+    Raised when token type is not valid for the operation.
+
+    HTTP Status: 401 Unauthorized
+    Error Code: INVALID_TOKEN_TYPE
+
+    Example:
+        raise InvalidTokenTypeException()
+    """
+
+    def __init__(
+        self, message: str = "Access token required", details: Optional[dict] = None
+    ):
+        super().__init__(
+            code="INVALID_TOKEN_TYPE",
+            message=message,
+            status_code=401,
+            details=details,
+        )

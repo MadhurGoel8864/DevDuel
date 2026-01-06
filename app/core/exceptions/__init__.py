@@ -6,7 +6,7 @@ from app.core.exceptions.auth import (
     UnauthorizedException,
 )
 from app.core.exceptions.base import AppException
-from app.core.exceptions.user import (
+from app.core.exceptions.users import (
     UserAlreadyExistsException,
     UserNotFoundException,
     UserValidationException,
