@@ -11,11 +11,20 @@ from app.api.auth.schemas import (
     ProtectedRouteResponse,
     LoginRequest,
     LoginResponse,
+    RefreshTokenRequest,
+    RefreshTokenResponse,
 )
 from app.api.users.dao.users import UserDAO, get_user_dao
-from app.core.security.jwt import create_access_token
+from app.core.security.jwt import create_access_token, create_refresh_token, decode_token
 from app.core.security.password import verify_password
-from app.core.exceptions.auth import UnauthorizedException, ForbiddenException
+from app.core.exceptions.auth import (
+    UnauthorizedException,
+    ForbiddenException,
+    InvalidAccessTokenException,
+    InvalidTokenTypeException,
+)
+from app.core.enums import TokenType, PlatformType
+from app.core.security.jwt import TokenExpiredError, InvalidTokenError
 from fastapi import Depends
 
 
@@ -115,4 +124,56 @@ async def login_handler(
     # Generate JWT access token
     access_token = create_access_token(payload=token_payload)
 
-    return LoginResponse(access_token=access_token)
+    # Generate JWT refresh token
+    refresh_token = create_refresh_token(payload=token_payload)
+
+    return LoginResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+async def refresh_token_handler(
+    request: RefreshTokenRequest,
+) -> RefreshTokenResponse:
+    """
+    Refresh access token using a valid refresh token.
+
+    This endpoint exchanges a valid refresh token for a new access token
+    without requiring re-authentication.
+
+    Args:
+        request: Refresh token request containing the refresh token
+
+    Returns:
+        RefreshTokenResponse: New JWT access token and token type
+
+    Raises:
+        InvalidAccessTokenException: If token is expired or invalid
+        InvalidTokenTypeException: If token type is not "refresh"
+    """
+    try:
+        # Decode and validate the refresh token
+        payload = decode_token(request.refresh_token)
+    except (TokenExpiredError, InvalidTokenError):
+        # Token is expired or invalid
+        raise InvalidAccessTokenException(message="Invalid or expired refresh token")
+
+    # Enforce token type must be "refresh"
+    token_type = payload.get("type")
+    if token_type != TokenType.REFRESH.value:
+        raise InvalidTokenTypeException(message="Refresh token required")
+
+    # Extract user information from refresh token payload
+    user_id = payload.get("sub")
+    email = payload.get("email")
+    platform = payload.get("platform", PlatformType.WEB.value)
+
+    # Create new access token payload
+    new_token_payload = {
+        "sub": user_id,
+        "email": email,
+        "platform": platform,
+    }
+
+    # Generate new JWT access token
+    access_token = create_access_token(payload=new_token_payload)
+
+    return RefreshTokenResponse(access_token=access_token)

@@ -80,7 +80,39 @@ class LoginResponse(BaseModel):
     """
     Response schema for successful login.
 
-    Returns JWT access token for authentication.
+    Returns JWT access token and refresh token for authentication.
+    """
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class RefreshTokenRequest(BaseModel):
+    """
+    Request schema for refreshing access token.
+
+    Contains the refresh token to exchange for a new access token.
+    """
+
+    refresh_token: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class RefreshTokenResponse(BaseModel):
+    """
+    Response schema for successful token refresh.
+
+    Returns new JWT access token.
     """
 
     access_token: str
