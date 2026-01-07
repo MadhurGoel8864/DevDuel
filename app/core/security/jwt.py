@@ -17,6 +17,7 @@ from app.core.config import settings
 JWT_SECRET_KEY = settings.effective_jwt_secret
 JWT_ALGORITHM = settings.jwt_algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
 class TokenExpiredError(Exception):
@@ -65,6 +66,50 @@ def create_access_token(
     to_encode["exp"] = expire
 
     to_encode["type"] = token_type.value
+    # Encode and return the JWT token
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+
+def create_refresh_token(payload: dict[str, Any]) -> str:
+    """
+    Create a JWT refresh token with the given payload.
+
+    Refresh tokens are long-lived tokens used to obtain new access tokens
+    without re-authentication. They contain minimal user information and
+    do NOT include permissions.
+
+    Automatically adds:
+    - iat (issued at): Current UTC timestamp
+    - exp (expiration): 7 days from now
+    - type: "refresh"
+
+    Args:
+        payload: Dictionary containing the token payload data.
+                 Should include: {"sub": user_id, "email": user_email, "platform": platform}
+
+    Returns:
+        str: Encoded JWT refresh token string
+
+    Example:
+        >>> token = create_refresh_token({"sub": "user123", "email": "user@example.com", "platform": "web"})
+        >>> print(token)
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+    """
+    # Create a copy to avoid mutating the original payload
+    to_encode = payload.copy()
+
+    # Add issued at timestamp
+    now = datetime.now(timezone.utc)
+    to_encode["iat"] = now
+
+    # Add expiration timestamp (7 days from now)
+    expire = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode["exp"] = expire
+
+    # Set token type to refresh
+    to_encode["type"] = TokenType.REFRESH.value
+
     # Encode and return the JWT token
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt

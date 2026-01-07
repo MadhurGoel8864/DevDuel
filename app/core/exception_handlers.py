@@ -9,13 +9,13 @@ import logging
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from app.core.exceptions.base import AppException
+# from app.core.exceptions.base import AppException
 from app.core.responses import APIResponse, ErrorResponse
 
 logger = logging.getLogger(__name__)
 
 
-async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+async def app_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """
     Handle AppException and all its subclasses.
 
