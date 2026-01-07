@@ -16,7 +16,7 @@ from app.core.config import settings
 # JWT Configuration
 JWT_SECRET_KEY = settings.effective_jwt_secret
 JWT_ALGORITHM = settings.jwt_algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
+ACCESS_TOKEN_EXPIRE_MINUTES = 10
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
@@ -86,13 +86,13 @@ def create_refresh_token(payload: dict[str, Any]) -> str:
 
     Args:
         payload: Dictionary containing the token payload data.
-                 Should include: {"sub": user_id, "email": user_email, "platform": platform}
+                 Should include: {"sub": user_id, "email": user_email}
 
     Returns:
         str: Encoded JWT refresh token string
 
     Example:
-        >>> token = create_refresh_token({"sub": "user123", "email": "user@example.com", "platform": "web"})
+        >>> token = create_refresh_token({"sub": "user123", "email": "user@example.com": "web"})
         >>> print(token)
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
     """
