@@ -8,6 +8,8 @@ from app.api.auth.schemas.auth import (
     LoginResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
+    VerifyOTPRequest,
+    VerifyOTPResponse,
 )
 
 __all__ = ["UserWithPermissions", "UserProfileResponse", "ProtectedRouteResponse"]

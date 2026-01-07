@@ -3,12 +3,13 @@
 from typing import Optional
 import logging
 from fastapi import Depends, Request
-
+from app.api.common.utils import generate_otp
 from app.api.users.dao.users import UserDAO, get_user_dao
 from app.api.users.schemas.users import UserCreateData
 from app.database.models.users import User
 from app.core.exceptions import UserNotFoundException, UserAlreadyExistsException
 from app.core.security.password import hash_password
+from app.api.auth.services.cache import store_user_otp
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +56,18 @@ class UserService:
         password_hash = hash_password(user_data.password)
 
         # Delegate to DAO
-        return await self._user_dao.create(
+        user = await self._user_dao.create(
             email=user_data.email,
             full_name=user_data.full_name,
             password_hash=password_hash,
         )
+
+        # 3️⃣ Store OTP in Redis
+        otp = generate_otp()
+        await store_user_otp(user.id, otp)
+        logger.info(f"OTP for user {user.id}: {otp}")
+
+        return user
 
     async def get_user_by_id(self, user_id: str) -> Optional[User]:
         """

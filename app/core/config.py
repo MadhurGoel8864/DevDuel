@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     db_user: str
     db_password: str
 
+    # Redis
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    OTP_EXPIRE_SECONDS: int = 300  # 5 minutes
+
     @property
     def database_url(self) -> str:
         return (

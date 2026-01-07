@@ -13,3 +13,4 @@ class User(Base, TimestampMixin):
     full_name: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(default=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=False)
+    is_verified: Mapped[bool] = mapped_column(default=False)
