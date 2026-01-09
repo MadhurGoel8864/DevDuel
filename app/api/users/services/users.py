@@ -10,6 +10,7 @@ from app.api.common.utils import generate_otp
 from app.api.users.dao.users import UserDAO, get_user_dao
 from app.api.users.schemas.users import UserCreateData
 from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException
+from app.core.exceptions.auth import UnauthorizedException
 from app.core.security.password import hash_password
 from app.database.models.users import User
 from app.services.email import email_service
@@ -129,6 +130,72 @@ class UserService:
         """
         logger.info("Retrieving all users")
         return await self._user_dao.get_all()
+
+    async def get_user_by_email(self, email: str):
+        """
+        Get user by email address.
+
+        Args:
+            email (str): User email address
+
+        Returns:
+            User: User instance
+
+        Raises:
+            UnauthorizedException: If user not found
+        """
+        user = await self._user_dao.get_by_email(email)
+        if not user:
+            logger.warning(f"User not found for email: {email}")
+            raise UnauthorizedException(message="User not found")
+        return user
+
+    async def resend_otp(self, email: str, background_tasks: BackgroundTasks) -> bool:
+        """
+        Resend OTP to user's email.
+
+        Validates user exists, generates new OTP, stores in Redis, and sends email.
+
+        Args:
+            email (str): User email address
+            background_tasks (BackgroundTasks): FastAPI background tasks for async operations
+
+        Returns:
+            bool: True if OTP was sent, False if user is already verified
+
+        Raises:
+            UnauthorizedException: If user not found
+            Exception: If OTP generation or storage fails
+        """
+        # Validate user exists (raises UnauthorizedException if not found)
+        user = await self.get_user_by_email(email)
+        logger.info(f"Resending OTP for user: {user.id}")
+
+        if user.is_verified:
+            logger.info(f"User {user.id} is already verified")
+            return False
+
+        try:
+            # Generate new OTP
+            otp = generate_otp()
+            logger.debug(f"Generated new OTP for user {user.id}")
+
+            # Store OTP in Redis with TTL
+            await store_user_otp(user.id, otp)
+            logger.info(f"OTP regenerated and stored for user {user.id}: {otp}")
+
+        except Exception as e:
+            logger.error(f"Failed to generate or store OTP for user {user.id}: {e}")
+            raise Exception("Failed to generate OTP. Please try again later.") from e
+
+        try:
+            background_tasks.add_task(send_verification_otp_task, email, otp)
+            logger.info(f"Resend OTP email task queued for {email}")
+
+        except Exception as e:
+            logger.error(f"Failed to queue email task for {email}: {e}")
+
+        return True
 
 
 async def get_user_service(

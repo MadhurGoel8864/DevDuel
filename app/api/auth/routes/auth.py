@@ -7,6 +7,7 @@ from app.api.auth.handlers import (
     login_handler,
     protected_route_handler,
     refresh_token_handler,
+    resend_otp_handler,
     send_otp_handler,
     verify_otp_handler,
 )
@@ -22,3 +23,4 @@ router.add_api_route("/protected", protected_route_handler, methods=["GET"])
 
 # OTP Email Example (demonstrates email service integration)
 router.add_api_route("/send-otp", send_otp_handler, methods=["POST"])
+router.add_api_route("/resend-otp", resend_otp_handler, methods=["POST"])

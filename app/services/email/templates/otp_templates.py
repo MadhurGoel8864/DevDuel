@@ -108,7 +108,7 @@ def otp_email_template(otp: str) -> tuple[str, str]:
                 </div>
             </div>
 
-            <p>This OTP will expire in <strong>{settings.OTP_EXPIRE_SECONDS//60} minutes</strong>. 
+            <p>This OTP will expire in <strong>{settings.OTP_EXPIRE_SECONDS//60} minutes</strong>.
             If you didn't request this verification code, you can safely ignore this email.</p>
 
             <div class="footer">

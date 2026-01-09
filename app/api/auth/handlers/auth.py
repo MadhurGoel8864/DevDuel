@@ -24,6 +24,7 @@ from app.api.auth.schemas import (
     VerifyOTPResponse,
 )
 from app.api.auth.services import AuthService, get_auth_service
+from app.api.users.services.users import UserService, get_user_service
 from app.core.enums import PlatformType
 from app.services.email import email_service
 from app.services.email.templates import otp_email_template
@@ -232,3 +233,41 @@ async def send_otp_handler(
         message="OTP sent successfully. Please check your email.",
         email=request.email,
     )
+
+
+async def resend_otp_handler(
+    request: SendOTPRequest,
+    background_tasks: BackgroundTasks,
+    user_service: UserService = Depends(get_user_service),
+) -> SendOTPResponse:
+    """
+    Resend OTP to user's email.
+
+    This endpoint delegates to the service layer to validate user existence,
+    generate a new OTP, store it in Redis, and send it via email.
+
+    Args:
+        request: Email address to resend OTP to
+        background_tasks: FastAPI background tasks for async email sending
+        user_service: User service for OTP operations
+
+    Returns:
+        SendOTPResponse: Confirmation message
+
+    Raises:
+        UnauthorizedException: If user with email does not exist
+    """
+    # Service layer handles all business logic and returns whether OTP was sent
+    otp_sent = await user_service.resend_otp(request.email, background_tasks)
+
+    # Return appropriate response based on whether OTP was sent
+    if otp_sent:
+        return SendOTPResponse(
+            message="OTP resent successfully. Please check your email.",
+            email=request.email,
+        )
+    else:
+        return SendOTPResponse(
+            message="User is already verified. No OTP needed.",
+            email=request.email,
+        )
