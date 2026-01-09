@@ -22,5 +22,5 @@ router.add_api_route("/me", get_profile_handler, methods=["GET"])
 router.add_api_route("/protected", protected_route_handler, methods=["GET"])
 
 # OTP Email Example (demonstrates email service integration)
-router.add_api_route("/send-otp", send_otp_handler, methods=["POST"])
+router.add_api_route("/send-otp", send_otp_handler, methods=["POST"])  # TODO: Remove 
 router.add_api_route("/resend-otp", resend_otp_handler, methods=["POST"])

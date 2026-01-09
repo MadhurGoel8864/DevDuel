@@ -219,9 +219,6 @@ async def send_otp_handler(
     Returns:
         SendOTPResponse: Confirmation message
     """
-    # TODO: Replace with Redis-based OTP storage
-    # Example: await redis_client.setex(f"otp:{request.email}", 300, otp)
-
     # Generate 6-digit OTP (placeholder - use secure random in production)
     otp = str(random.randint(100000, 999999))
 
