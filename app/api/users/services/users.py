@@ -95,7 +95,6 @@ class UserService:
         # Generate OTP and store in Redis
         otp = generate_otp()
         await store_user_otp(user.id, otp)
-        logger.info(f"OTP generated and stored for user {user.id}: {otp}")
 
         # Send verification OTP email in background (non-blocking)
         background_tasks.add_task(send_verification_otp_task, user.email, otp)
@@ -182,7 +181,6 @@ class UserService:
 
             # Store OTP in Redis with TTL
             await store_user_otp(user.id, otp)
-            logger.info(f"OTP regenerated and stored for user {user.id}: {otp}")
 
         except Exception as e:
             logger.error(f"Failed to generate or store OTP for user {user.id}: {e}")
