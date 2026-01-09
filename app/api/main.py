@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.users.routes.users import router as users_router
 from app.api.auth.routes import router as auth_router
+from app.api.users.routes.users import router as users_router
 from app.core.database import get_db
 
 # routers will be added later

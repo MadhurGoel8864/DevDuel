@@ -1,8 +1,7 @@
 # app/main.py
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
-from fastapi import HTTPException
-from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
+
 from app.api.main import api_router
 from app.core.config import settings
 from app.core.exception_handlers import (
@@ -13,6 +12,7 @@ from app.core.exception_handlers import (
 )
 from app.core.exceptions.base import AppException
 from app.core.logging import setup_logging
+from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
 
 
 def create_app() -> FastAPI:

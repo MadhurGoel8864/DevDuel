@@ -1,31 +1,32 @@
 """Auth Service Layer"""
 
 import logging
+
 from fastapi import Depends
 from redis.asyncio import Redis
 
-from app.api.users.dao.users import UserDAO, get_user_dao
 from app.api.auth.schemas.auth import (
     AuthTokens,
     OTPVerificationResult,
     TokenRefreshResult,
 )
-from app.core.redis import get_redis_client
-from app.core.security.password import verify_password
-from app.core.security.jwt import (
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    TokenExpiredError,
-    InvalidTokenError,
-)
+from app.api.users.dao.users import UserDAO, get_user_dao
+from app.core.enums import TokenType
 from app.core.exceptions.auth import (
-    UnauthorizedException,
     ForbiddenException,
     InvalidAccessTokenException,
     InvalidTokenTypeException,
+    UnauthorizedException,
 )
-from app.core.enums import TokenType
+from app.core.redis import get_redis_client
+from app.core.security.jwt import (
+    InvalidTokenError,
+    TokenExpiredError,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+)
+from app.core.security.password import verify_password
 
 logger = logging.getLogger(__name__)
 

@@ -37,8 +37,8 @@ migration:
 	fi
 
 fmt:
+	poetry run isort .
 	poetry run black .
-# 	poetry run isort .
 
 lint:
 	poetry run flake8 .

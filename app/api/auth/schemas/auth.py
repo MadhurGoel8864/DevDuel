@@ -203,3 +203,16 @@ class VerifyOTPResponse(BaseModel):
         """Pydantic configuration."""
 
         from_attributes = True
+
+
+class SendOTPRequest(BaseModel):
+    """Request schema for sending OTP."""
+
+    email: EmailStr
+
+
+class SendOTPResponse(BaseModel):
+    """Response schema for OTP sending."""
+
+    message: str
+    email: str

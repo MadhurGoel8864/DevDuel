@@ -7,11 +7,11 @@ It does NOT depend on FastAPI or any web framework.
 
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from app.core.enums import TokenType
+
 import jwt
 
 from app.core.config import settings
-
+from app.core.enums import TokenType
 
 # JWT Configuration
 JWT_SECRET_KEY = settings.effective_jwt_secret

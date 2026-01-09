@@ -1,13 +1,15 @@
 """Auth schemas module."""
 
 from app.api.auth.schemas.auth import (
-    UserWithPermissions,
-    UserProfileResponse,
-    ProtectedRouteResponse,
     LoginRequest,
     LoginResponse,
+    ProtectedRouteResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
+    SendOTPRequest,
+    SendOTPResponse,
+    UserProfileResponse,
+    UserWithPermissions,
     VerifyOTPRequest,
     VerifyOTPResponse,
 )
