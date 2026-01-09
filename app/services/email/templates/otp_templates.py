@@ -4,6 +4,7 @@ Email templates for various use cases.
 
 This module provides functions to generate email content for different scenarios.
 """
+from app.core.config import settings
 
 
 def otp_email_template(otp: str) -> tuple[str, str]:
@@ -107,7 +108,8 @@ def otp_email_template(otp: str) -> tuple[str, str]:
                 </div>
             </div>
 
-            <p>This OTP will expire in <strong>5 minutes</strong>. If you didn't request this verification code, you can safely ignore this email.</p>
+            <p>This OTP will expire in <strong>{settings.OTP_EXPIRE_SECONDS//60} minutes</strong>. 
+            If you didn't request this verification code, you can safely ignore this email.</p>
 
             <div class="footer">
                 <p>This is an automated message, please do not reply to this email.</p>
