@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     db_user: str
     db_password: str
 
+    # Redis
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    OTP_EXPIRE_SECONDS: int = 300  # 5 minutes
+
     @property
     def database_url(self) -> str:
         return (
@@ -41,6 +47,13 @@ class Settings(BaseSettings):
             f"{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
+
+    # SMTP Email Configuration (Optional - required only if using email service)
+    smtp_host: str = Field(default="smtp.gmail.com")
+    smtp_port: int = Field(default=587)
+    smtp_username: str = Field(default="")
+    smtp_password: str = Field(default="")
+    email_from: str = Field(default="")
 
     class Config:
         env_file = ".env"

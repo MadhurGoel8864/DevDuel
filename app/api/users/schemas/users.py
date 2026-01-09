@@ -54,6 +54,7 @@ class UserBaseData(BaseSchema):
     email: EmailStr
     full_name: str
     is_active: bool
+    is_verified: bool
 
 
 class UserCreateResponseData(UserBaseData, ISTDatetimeMixin):

@@ -1,16 +1,43 @@
 """User Service Layer"""
 
-from typing import Optional
 import logging
-from fastapi import Depends, Request
+from typing import Optional
 
+from fastapi import BackgroundTasks, Depends, Request
+
+from app.api.auth.services.cache import store_user_otp
+from app.api.common.utils import generate_otp
 from app.api.users.dao.users import UserDAO, get_user_dao
 from app.api.users.schemas.users import UserCreateData
-from app.database.models.users import User
-from app.core.exceptions import UserNotFoundException, UserAlreadyExistsException
+from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException
 from app.core.security.password import hash_password
+from app.database.models.users import User
+from app.services.email import email_service
+from app.services.email.templates import otp_email_template
 
 logger = logging.getLogger(__name__)
+
+
+def send_verification_otp_task(email: str, otp: str) -> None:
+    """
+    Background task to send verification OTP email after user creation.
+
+    Args:
+        email: User's email address
+        otp: The OTP code to send
+    """
+    try:
+        subject, html_body = otp_email_template(otp)
+        email_service.send_email(
+            to_email=email,
+            subject=subject,
+            body=html_body,
+            html=True,
+        )
+        logger.info(f"Verification OTP sent successfully to: {email}")
+    except Exception as e:
+        # Log error but don't crash the background task
+        logger.error(f"Failed to send verification OTP to {email}: {e}")
 
 
 class UserService:
@@ -30,13 +57,16 @@ class UserService:
         """
         self._user_dao = user_dao
 
-    async def create_user(self, user_data: UserCreateData) -> User:
+    async def create_user(
+        self, user_data: UserCreateData, background_tasks: BackgroundTasks
+    ) -> User:
         """
         Create a new user with business logic validation.
-        For carpooling: validates unique email before creating user.
+        For carpooling: validates unique email before creating user and sends OTP.
 
         Args:
             user_data (UserCreateData): Pydantic schema with user details.
+            background_tasks (BackgroundTasks): FastAPI background tasks for async operations.
 
         Returns:
             User: The created user instance.
@@ -55,11 +85,22 @@ class UserService:
         password_hash = hash_password(user_data.password)
 
         # Delegate to DAO
-        return await self._user_dao.create(
+        user = await self._user_dao.create(
             email=user_data.email,
             full_name=user_data.full_name,
             password_hash=password_hash,
         )
+
+        # Generate OTP and store in Redis
+        otp = generate_otp()
+        await store_user_otp(user.id, otp)
+        logger.info(f"OTP generated and stored for user {user.id}: {otp}")
+
+        # Send verification OTP email in background (non-blocking)
+        background_tasks.add_task(send_verification_otp_task, user.email, otp)
+        logger.info(f"OTP email task queued for {user.email}")
+
+        return user
 
     async def get_user_by_id(self, user_id: str) -> Optional[User]:
         """

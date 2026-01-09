@@ -4,7 +4,7 @@ Authentication schemas for user authentication and authorization.
 
 from pydantic import BaseModel, EmailStr
 
-from app.core.enums import UserRole, PlatformType
+from app.core.enums import UserRole
 
 
 class UserWithPermissions(BaseModel):
@@ -12,7 +12,7 @@ class UserWithPermissions(BaseModel):
     User object with permissions for authenticated requests.
 
     This schema represents the current authenticated user with their
-    role, permissions, and platform information.
+    role, permissions, and verification status.
     """
 
     user_id: str
@@ -20,7 +20,7 @@ class UserWithPermissions(BaseModel):
     role: UserRole
     permissions: list[str]
     is_active: bool
-    platform: PlatformType
+    is_verified: bool
 
     class Config:
         """Pydantic configuration."""
@@ -40,7 +40,7 @@ class UserProfileResponse(BaseModel):
     role: UserRole
     permissions: list[str]
     is_active: bool
-    platform: PlatformType
+    is_verified: bool
 
     class Config:
         """Pydantic configuration."""
@@ -59,16 +59,64 @@ class ProtectedRouteResponse(BaseModel):
     authenticated_as: str
 
 
+# Service-level data models
+class AuthTokens(BaseModel):
+    """
+    Data model for authentication tokens.
+
+    Used by the service layer to return token data.
+    """
+
+    access_token: str
+    refresh_token: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class OTPVerificationResult(BaseModel):
+    """
+    Data model for OTP verification result.
+
+    Used by the service layer to return verification status.
+    """
+
+    message: str
+    is_verified: bool
+    email: EmailStr
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class TokenRefreshResult(BaseModel):
+    """
+    Data model for token refresh result.
+
+    Used by the service layer to return new access token.
+    """
+
+    access_token: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
 class LoginRequest(BaseModel):
     """
     Request schema for user login.
 
-    Contains user credentials and platform information.
+    Contains user credentials.
     """
 
     email: EmailStr
     password: str
-    platform: PlatformType = PlatformType.WEB
 
     class Config:
         """Pydantic configuration."""
@@ -122,3 +170,49 @@ class RefreshTokenResponse(BaseModel):
         """Pydantic configuration."""
 
         from_attributes = True
+
+
+class VerifyOTPRequest(BaseModel):
+    """
+    Request schema for OTP verification.
+
+    Contains the user's email and OTP code to verify.
+    """
+
+    email: EmailStr
+    otp: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class VerifyOTPResponse(BaseModel):
+    """
+    Response schema for successful OTP verification.
+
+    Returns success message and verification status.
+    """
+
+    message: str
+    is_verified: bool
+    email: EmailStr
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class SendOTPRequest(BaseModel):
+    """Request schema for sending OTP."""
+
+    email: EmailStr
+
+
+class SendOTPResponse(BaseModel):
+    """Response schema for OTP sending."""
+
+    message: str
+    email: str

@@ -11,7 +11,6 @@ class UserRole(str, Enum):
 
     USER = "user"
     ADMIN = "admin"
-    MODERATOR = "moderator"
 
 
 class PlatformType(str, Enum):

@@ -5,18 +5,20 @@ This module provides authentication dependencies for protecting routes
 and extracting the current authenticated user.
 """
 
-from fastapi import Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, Header
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.api.auth.schemas import UserWithPermissions
-from app.core.enums import TokenType, UserRole, PlatformType
-from app.core.security.jwt import decode_token, TokenExpiredError, InvalidTokenError
+from app.api.users.dao.users import UserDAO, get_user_dao
+from app.core.constants import PLATFORM_TYPE_HEADER
+from app.core.enums import PlatformType, TokenType, UserRole
 from app.core.exceptions.auth import (
     AuthenticationRequiredException,
+    ForbiddenException,
     InvalidAccessTokenException,
     InvalidTokenTypeException,
 )
-
+from app.core.security.jwt import InvalidTokenError, TokenExpiredError, decode_token
 
 # HTTP Bearer scheme for Swagger UI "Authorize" button
 security = HTTPBearer(
@@ -24,8 +26,36 @@ security = HTTPBearer(
 )
 
 
+async def get_platform_type(
+    platform_type: PlatformType = Header(
+        default=PlatformType.WEB.value, alias=PLATFORM_TYPE_HEADER
+    )
+) -> PlatformType:
+    """
+    Dependency to extract platform type from HTTP header.
+
+    Extracts platform type from X-Platform-Type header.
+    Defaults to WEB if header is not provided.
+
+    Args:
+        platform_type: Platform type from header (default: "web")
+
+    Returns:
+        PlatformType: Platform type enum
+
+    Raises:
+        ValueError: If invalid platform type is provided
+    """
+    try:
+        return PlatformType(platform_type)
+    except ValueError:
+        # If invalid platform type, default to WEB
+        return PlatformType.WEB
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    user_dao: UserDAO = Depends(get_user_dao),
 ) -> UserWithPermissions:
     """
     Get the current authenticated user from JWT access token.
@@ -34,10 +64,12 @@ async def get_current_user(
     - Extracts the Bearer token from Authorization header
     - Decodes and validates the token
     - Enforces that the token is an ACCESS token (not REFRESH)
+    - Verifies that the user account is verified (is_verified=True)
     - Returns a UserWithPermissions object
 
     Args:
         credentials: HTTP Bearer credentials from the Authorization header
+        user_dao: User data access object for database operations
 
     Returns:
         UserWithPermissions: The authenticated user with permissions
@@ -46,6 +78,7 @@ async def get_current_user(
         AuthenticationRequiredException: If no credentials are provided
         InvalidAccessTokenException: If token is invalid or expired
         InvalidTokenTypeException: If token type is not ACCESS
+        ForbiddenException: If user account is not verified
     """
     # Check if credentials are provided
     if not credentials:
@@ -69,15 +102,29 @@ async def get_current_user(
         if not user_id or not email:
             raise InvalidAccessTokenException(message="Invalid token payload")
 
-        # TODO: Create and return UserWithPermissions object
-        # Note: Permissions are not fetched from DB yet (as per Step 2 requirements)
+        # Fetch user from database to check verification status
+        user = await user_dao.get_by_id(user_id)
+        if not user:
+            raise InvalidAccessTokenException(message="User not found")
+
+        # Check if user is verified
+        if not user.is_verified:
+            raise ForbiddenException(
+                message="Account not verified. Please verify your account with OTP."
+            )
+
+        # Check if user is active
+        if not user.is_active:
+            raise ForbiddenException(message="User account is inactive")
+
+        # Return UserWithPermissions object with real user data
         return UserWithPermissions(
-            user_id=user_id,
-            email=email,
+            user_id=user.id,
+            email=user.email,
             role=UserRole.USER,  # Default role
             permissions=[],  # Empty permissions for now
-            is_active=True,  # Default to active
-            platform=PlatformType.WEB,  # Default platform
+            is_active=user.is_active,
+            is_verified=user.is_verified,
         )
 
     except TokenExpiredError:

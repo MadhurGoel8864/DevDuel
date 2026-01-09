@@ -41,7 +41,12 @@ class UserDAO:
             Exception: If database operation fails.
         """
         try:
-            user = User(email=email, full_name=full_name, password_hash=password_hash)
+            user = User(
+                email=email,
+                full_name=full_name,
+                password_hash=password_hash,
+                is_verified=False,
+            )
             self._session.add(user)
             await self._session.commit()
             await self._session.refresh(user)
@@ -85,6 +90,32 @@ class UserDAO:
             return result.scalar_one_or_none()
         except Exception as e:
             logger.error(f"Exception occurred while getting user by email: {e}")
+            raise e
+
+    async def verify_user(self, email: str) -> Optional[User]:
+        """
+        Verify a user by setting is_verified to True.
+
+        Args:
+            email (str): Email address of the user to verify.
+
+        Returns:
+            Optional[User]: Updated user instance if found, None otherwise.
+
+        Raises:
+            Exception: If database operation fails.
+        """
+        try:
+            # Get the user by email
+            user = await self.get_by_email(email)
+            if user:
+                user.is_verified = True
+                await self._session.commit()
+                await self._session.refresh(user)
+            return user
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Exception occurred while verifying user: {e}")
             raise e
 
     # Remove

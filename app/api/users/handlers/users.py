@@ -1,6 +1,8 @@
 """User Handler Layer"""
 
-from fastapi import Body, Depends, Path
+import logging
+
+from fastapi import BackgroundTasks, Body, Depends, Path
 
 from app.api.users.schemas.users import (
     UserCreateRequest,
@@ -13,16 +15,22 @@ from app.api.users.schemas.users import (
 )
 from app.api.users.services.users import UserService, get_user_service
 
+logger = logging.getLogger(__name__)
+
 
 async def create_user_handler(
     request: UserCreateRequest = Body(..., description="User creation data"),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     user_service: UserService = Depends(get_user_service),
 ) -> UserCreateResponse:
     """
     Handle user creation request.
-    For carpooling: Creates a new user (rider, driver, or admin).
+    For carpooling: Creates a new user (rider, driver, or admin) and sends verification OTP.
     """
-    user = await user_service.create_user(request.data)
+    # Service layer handles user creation, OTP generation, storage, and email sending
+    user = await user_service.create_user(request.data, background_tasks)
+    logger.info(f"User created successfully: {user.email}")
+
     return UserCreateResponse(data=UserCreateResponseData.model_validate(user))
 
 

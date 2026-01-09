@@ -20,7 +20,9 @@ dependencies = [
     "pyjwt (>=2.8.0,<3.0.0)",
     "mypy (>=1.19.1,<2.0.0)",
     "passlib[bcrypt] (>=1.7.4,<2.0.0)",
-    "bcrypt (==3.2.2)"
+    "bcrypt (==3.2.2)",
+    "psycopg (>=3.3.2,<4.0.0)",
+    "redis (>=5.0.1,<6.0.0)"
 ]
 
 [tool.flake8]
