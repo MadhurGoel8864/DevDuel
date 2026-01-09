@@ -48,6 +48,13 @@ class Settings(BaseSettings):
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
 
+    # SMTP Email Configuration (Optional - required only if using email service)
+    smtp_host: str = Field(default="smtp.gmail.com")
+    smtp_port: int = Field(default=587)
+    smtp_username: str = Field(default="")
+    smtp_password: str = Field(default="")
+    email_from: str = Field(default="")
+
     class Config:
         env_file = ".env"
 

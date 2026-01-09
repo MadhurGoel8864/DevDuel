@@ -4,24 +4,29 @@ Authentication handlers.
 These handlers implement the authentication endpoints.
 """
 
-from fastapi import Depends
+import logging
+import random
 
-from app.api.auth.dependencies import get_current_user
+from fastapi import BackgroundTasks, Depends
+
+from app.api.auth.dependencies import get_current_user, get_platform_type
 from app.api.auth.schemas import (
-    UserWithPermissions,
-    UserProfileResponse,
-    ProtectedRouteResponse,
     LoginRequest,
     LoginResponse,
+    ProtectedRouteResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
+    SendOTPRequest,
+    SendOTPResponse,
+    UserProfileResponse,
+    UserWithPermissions,
     VerifyOTPRequest,
     VerifyOTPResponse,
 )
 from app.api.auth.services import AuthService, get_auth_service
-from app.api.auth.dependencies import get_platform_type
 from app.core.enums import PlatformType
-import logging
+from app.services.email import email_service
+from app.services.email.templates import otp_email_template
 
 logger = logging.getLogger(__name__)
 
@@ -163,4 +168,67 @@ async def verify_otp_handler(
         message=result.message,
         is_verified=result.is_verified,
         email=result.email,
+    )
+
+
+def send_otp_email_task(email: str, otp: str) -> None:
+    """
+    Background task to send OTP email.
+
+    This runs asynchronously without blocking the HTTP response.
+
+    Args:
+        email: Recipient email address
+        otp: The OTP code to send
+    """
+    try:
+        subject, html_body = otp_email_template(otp)
+        email_service.send_email(
+            to_email=email,
+            subject=subject,
+            body=html_body,
+            html=True,
+        )
+    except Exception as e:
+        # Log error but don't crash the background task
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to send OTP email to {email}: {e}")
+
+
+async def send_otp_handler(
+    request: SendOTPRequest,
+    background_tasks: BackgroundTasks,
+) -> SendOTPResponse:
+    """
+    Send OTP to user's email (example implementation).
+
+    This is a demonstration of how to integrate the email service.
+    In production, you should:
+    1. Generate OTP using a secure random generator
+    2. Store OTP in Redis with 5-minute TTL
+    3. Associate OTP with user email
+    4. Send email via background task (as shown here)
+
+    Args:
+        request: Email address to send OTP to
+        background_tasks: FastAPI background tasks for async email sending
+
+    Returns:
+        SendOTPResponse: Confirmation message
+    """
+    # TODO: Replace with Redis-based OTP storage
+    # Example: await redis_client.setex(f"otp:{request.email}", 300, otp)
+
+    # Generate 6-digit OTP (placeholder - use secure random in production)
+    otp = str(random.randint(100000, 999999))
+
+    # Add email sending to background tasks (non-blocking)
+    background_tasks.add_task(send_otp_email_task, request.email, otp)
+
+    # Return immediately without waiting for email to send
+    return SendOTPResponse(
+        message="OTP sent successfully. Please check your email.",
+        email=request.email,
     )

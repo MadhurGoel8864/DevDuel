@@ -6,20 +6,19 @@ and extracting the current authenticated user.
 """
 
 from fastapi import Depends, Header
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.api.auth.schemas import UserWithPermissions
 from app.api.users.dao.users import UserDAO, get_user_dao
-from app.core.enums import TokenType, UserRole, PlatformType
 from app.core.constants import PLATFORM_TYPE_HEADER
-from app.core.security.jwt import decode_token, TokenExpiredError, InvalidTokenError
+from app.core.enums import PlatformType, TokenType, UserRole
 from app.core.exceptions.auth import (
     AuthenticationRequiredException,
+    ForbiddenException,
     InvalidAccessTokenException,
     InvalidTokenTypeException,
-    ForbiddenException,
 )
-
+from app.core.security.jwt import InvalidTokenError, TokenExpiredError, decode_token
 
 # HTTP Bearer scheme for Swagger UI "Authorize" button
 security = HTTPBearer(
