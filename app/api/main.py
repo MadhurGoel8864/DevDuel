@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth.routes import router as auth_router
+from app.api.auth.routes import AuthRouter, OAuthRouter
 from app.api.users.routes.users import router as users_router
 from app.core.database import get_db
 
@@ -25,4 +25,5 @@ async def health_check():
 
 
 api_router.include_router(users_router)
-api_router.include_router(auth_router)
+api_router.include_router(AuthRouter)
+api_router.include_router(OAuthRouter)

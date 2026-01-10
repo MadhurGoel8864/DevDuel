@@ -95,7 +95,17 @@ class AuthService:
                 message="Please verify your account before logging in"
             )
 
-        # Validate password hash exists
+        # Check if account was created via OAuth (Google) and has no password set
+        if not user.password_hash and user.auth_provider == "google":
+            logger.warning(
+                f"Authentication failed: Account created via Google OAuth for {email}"
+            )
+            raise UnauthorizedException(
+                message="This account was created using Google Sign-In. "
+                "Please sign in with Google or set a password for your account."
+            )
+
+        # Validate password hash exists for local accounts
         if not user.password_hash:
             logger.warning(f"Authentication failed: No password hash for {email}")
             raise UnauthorizedException(message="Invalid credentials")

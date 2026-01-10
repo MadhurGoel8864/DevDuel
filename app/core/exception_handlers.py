@@ -9,7 +9,6 @@ import logging
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-# from app.core.exceptions.base import AppException
 from app.core.exceptions.base import AppException
 from app.core.responses import APIResponse, ErrorResponse
 

@@ -151,3 +151,12 @@ def decode_token(token: str) -> dict[str, Any]:
     except jwt.InvalidTokenError:
         # Invalid signature or malformed token
         raise InvalidTokenError("Invalid token or signature")
+
+
+def issue_token(user_id: str, email: str) -> str:
+    payload = {
+        "sub": str(user_id),
+        "email": email,
+        "provider": "google",
+    }
+    return create_access_token(payload)

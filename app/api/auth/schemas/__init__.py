@@ -13,5 +13,12 @@ from app.api.auth.schemas.auth import (
     VerifyOTPRequest,
     VerifyOTPResponse,
 )
+from app.api.auth.schemas.oauth import GoogleCallbackResponse, GoogleLoginResponse
 
-__all__ = ["UserWithPermissions", "UserProfileResponse", "ProtectedRouteResponse"]
+__all__ = [
+    "UserWithPermissions",
+    "UserProfileResponse",
+    "ProtectedRouteResponse",
+    "GoogleLoginResponse",
+    "GoogleCallbackResponse",
+]

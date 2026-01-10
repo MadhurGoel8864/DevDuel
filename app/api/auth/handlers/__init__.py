@@ -9,3 +9,4 @@ from app.api.auth.handlers.auth import (
     send_otp_handler,
     verify_otp_handler,
 )
+from app.api.auth.handlers.oauth import google_callback_handler, google_login_handler

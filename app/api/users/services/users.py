@@ -195,6 +195,44 @@ class UserService:
 
         return True
 
+    async def get_or_create_oauth_user(
+        self,
+        email: str,
+        provider: str,
+        provider_user_id: str,
+        full_name: str | None = None,
+    ) -> User:
+        """
+        Get an existing user or create/link a user via OAuth.
+
+        Rules:
+        - Same email → same user
+        - Local (OTP) users get upgraded to OAuth
+        - OAuth users are reused
+        """
+
+        user = await self._user_dao.get_by_email(email)
+
+        if user:
+            # Case 1: Existing LOCAL/OTP user → link OAuth
+            if user.auth_provider == "local":
+                return await self._user_dao.link_oauth_provider(
+                    user=user,
+                    provider=provider,
+                    provider_user_id=provider_user_id,
+                )
+
+            # Case 2: Existing OAuth user → just login
+            return user
+
+        # Case 3: First-time OAuth login → create user
+        return await self._user_dao.create_oauth_user(
+            email=email,
+            full_name=full_name,
+            provider=provider,
+            provider_user_id=provider_user_id,
+        )
+
 
 async def get_user_service(
     request: Request,

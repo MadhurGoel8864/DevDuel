@@ -1,5 +1,6 @@
 """Authentication API Routes"""
 
+# TODO: Add logout, forgot password
 from fastapi import APIRouter
 
 from app.api.auth.handlers import (
