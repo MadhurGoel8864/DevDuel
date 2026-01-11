@@ -1,1 +1,2 @@
 from app.services.email.templates.otp_templates import otp_email_template
+from app.services.email.templates.password_reset import password_reset_email_template

@@ -133,6 +133,86 @@ class UserDAO:
             logger.error(f"Exception occurred while getting all users: {e}")
             raise e
 
+    async def link_oauth_provider(
+        self,
+        user: User,
+        provider: str,
+        provider_user_id: str,
+    ) -> User:
+        """
+        Link an existing user account with an OAuth provider.
+        Used when a local/OTP user logs in via Google.
+        """
+        try:
+            user.auth_provider = provider
+            user.provider_user_id = provider_user_id
+            user.is_verified = True  # OAuth email is verified
+
+            await self._session.commit()
+            await self._session.refresh(user)
+            return user
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to link OAuth provider: {e}")
+            raise e
+
+    async def create_oauth_user(
+        self,
+        email: str,
+        full_name: str | None,
+        provider: str,
+        provider_user_id: str,
+    ) -> User:
+        """
+        Create a new user via OAuth (Google).
+        """
+        try:
+            user = User(
+                email=email,
+                full_name=full_name,
+                password_hash=None,
+                auth_provider=provider,
+                provider_user_id=provider_user_id,
+                is_verified=True,
+                is_active=True,
+            )
+            self._session.add(user)
+            await self._session.commit()
+            await self._session.refresh(user)
+            return user
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to create OAuth user: {e}")
+            raise e
+
+    async def update_password(self, user_id: str, new_password_hash: str) -> User:
+        """
+        Update user's password hash.
+
+        Args:
+            user_id (str): User ID to update.
+            new_password_hash (str): New hashed password.
+
+        Returns:
+            User: Updated user instance.
+
+        Raises:
+            Exception: If database operation fails or user not found.
+        """
+        try:
+            user = await self.get_by_id(user_id)
+            if not user:
+                raise ValueError(f"User with ID {user_id} not found")
+
+            user.password_hash = new_password_hash
+            await self._session.commit()
+            await self._session.refresh(user)
+            return user
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to update password for user {user_id}: {e}")
+            raise e
+
 
 # Dependency
 async def get_user_dao(session: AsyncSession = Depends(get_db)) -> UserDAO:

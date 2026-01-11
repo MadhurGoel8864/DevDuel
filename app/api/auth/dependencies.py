@@ -18,7 +18,12 @@ from app.core.exceptions.auth import (
     InvalidAccessTokenException,
     InvalidTokenTypeException,
 )
-from app.core.security.jwt import InvalidTokenError, TokenExpiredError, decode_token
+from app.core.security.jwt import (
+    InvalidTokenError,
+    TokenExpiredError,
+    decode_token,
+    is_jti_blacklisted,
+)
 
 # HTTP Bearer scheme for Swagger UI "Authorize" button
 security = HTTPBearer(
@@ -95,6 +100,15 @@ async def get_current_user(
         if token_type != TokenType.ACCESS.value:
             raise InvalidTokenTypeException()
 
+        # Check if token is blacklisted
+        jti = payload.get("jti")
+
+        if not isinstance(jti, str):
+            raise InvalidAccessTokenException(message="Invalid token payload")
+
+        if await is_jti_blacklisted(jti):
+            raise InvalidAccessTokenException(message="Token has been blacklisted")
+
         # Extract user information from payload
         user_id = payload.get("sub")
         email = payload.get("email")
@@ -134,6 +148,82 @@ async def get_current_user(
     except InvalidTokenError:
         # Invalid token signature or malformed token
         raise InvalidAccessTokenException(message="Invalid token")
+
+    except (
+        AuthenticationRequiredException,
+        InvalidAccessTokenException,
+        InvalidTokenTypeException,
+    ):
+        # Re-raise our custom exceptions
+        raise
+
+    except Exception:
+        # Catch any other unexpected errors without leaking details
+        raise
+
+
+async def get_logout_tokens(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> str:
+    """
+    Validate logout request and extract both access and refresh tokens.
+
+    This dependency:
+    - Extracts the access token from Authorization header
+    - Decodes and validates the access token
+    - Enforces that the token is an ACCESS token
+    - Returns tuple of (access_token, refresh_token) for blacklisting
+
+    Note: The refresh token validation happens in the service layer
+    after this dependency extracts the access token.
+
+    Args:
+        credentials: HTTP Bearer credentials from the Authorization header
+        user_dao: User data access object for database operations
+
+    Returns:
+        str: Access token for blacklisting
+
+    Raises:
+        AuthenticationRequiredException: If no credentials are provided
+        InvalidAccessTokenException: If token is invalid or expired
+        InvalidTokenTypeException: If token type is not ACCESS
+    """
+    # Check if credentials are provided
+    if not credentials:
+        raise AuthenticationRequiredException()
+
+    access_token = credentials.credentials
+
+    try:
+        # Decode the access token
+        payload = decode_token(access_token)
+
+        # Enforce ACCESS token type
+        token_type = payload.get("type")
+        if token_type != TokenType.ACCESS.value:
+            raise InvalidTokenTypeException(
+                message="Access token required in Authorization header"
+            )
+
+        # Extract user information from payload
+        user_id = payload.get("sub")
+        email = payload.get("email")
+
+        if not user_id or not email:
+            raise InvalidAccessTokenException(message="Invalid token payload")
+
+        # Return the access token for blacklisting
+        # Refresh token will be validated in the service layer
+        return access_token
+
+    except TokenExpiredError:
+        # Token has expired
+        raise InvalidAccessTokenException(message="Access token has expired")
+
+    except InvalidTokenError:
+        # Invalid token signature or malformed token
+        raise InvalidAccessTokenException(message="Invalid access token")
 
     except (
         AuthenticationRequiredException,

@@ -9,13 +9,21 @@ import random
 
 from fastapi import BackgroundTasks, Depends
 
-from app.api.auth.dependencies import get_current_user, get_platform_type
+from app.api.auth.dependencies import (
+    get_current_user,
+    get_logout_tokens,
+    get_platform_type,
+)
 from app.api.auth.schemas import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     LoginResponse,
+    LogoutRequest,
     ProtectedRouteResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
+    ResetPasswordRequest,
     SendOTPRequest,
     SendOTPResponse,
     UserProfileResponse,
@@ -24,9 +32,14 @@ from app.api.auth.schemas import (
     VerifyOTPResponse,
 )
 from app.api.auth.services import AuthService, get_auth_service
+from app.api.common.responses import MessageResponse
+from app.api.users.services.users import UserService, get_user_service
 from app.core.enums import PlatformType
 from app.services.email import email_service
-from app.services.email.templates import otp_email_template
+from app.services.email.templates import (
+    otp_email_template,
+    password_reset_email_template,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +148,9 @@ async def refresh_token_handler(
     # Delegate token refresh to service layer
     result = await auth_service.refresh_access_token(request.refresh_token)
 
-    return RefreshTokenResponse(access_token=result.access_token)
+    return RefreshTokenResponse(
+        access_token=result.access_token, refresh_token=result.refresh_token
+    )
 
 
 async def verify_otp_handler(
@@ -218,9 +233,6 @@ async def send_otp_handler(
     Returns:
         SendOTPResponse: Confirmation message
     """
-    # TODO: Replace with Redis-based OTP storage
-    # Example: await redis_client.setex(f"otp:{request.email}", 300, otp)
-
     # Generate 6-digit OTP (placeholder - use secure random in production)
     otp = str(random.randint(100000, 999999))
 
@@ -232,3 +244,162 @@ async def send_otp_handler(
         message="OTP sent successfully. Please check your email.",
         email=request.email,
     )
+
+
+async def resend_otp_handler(
+    request: SendOTPRequest,
+    background_tasks: BackgroundTasks,
+    user_service: UserService = Depends(get_user_service),
+) -> SendOTPResponse:
+    """
+    Resend OTP to user's email.
+
+    This endpoint delegates to the service layer to validate user existence,
+    generate a new OTP, store it in Redis, and send it via email.
+
+    Args:
+        request: Email address to resend OTP to
+        background_tasks: FastAPI background tasks for async email sending
+        user_service: User service for OTP operations
+
+    Returns:
+        SendOTPResponse: Confirmation message
+
+    Raises:
+        UnauthorizedException: If user with email does not exist
+    """
+    # Service layer handles all business logic and returns whether OTP was sent
+    otp_sent = await user_service.resend_otp(request.email, background_tasks)
+
+    # Return appropriate response based on whether OTP was sent
+    if otp_sent:
+        return SendOTPResponse(
+            message="OTP resent successfully. Please check your email.",
+            email=request.email,
+        )
+    else:
+        return SendOTPResponse(
+            message="User is already verified. No OTP needed.",
+            email=request.email,
+        )
+
+
+def send_password_reset_email_task(email: str, reset_token: str) -> None:
+    """
+    Background task to send password reset email.
+
+    This runs asynchronously without blocking the HTTP response.
+
+    Args:
+        email: Recipient email address
+        reset_token: The password reset token to send
+    """
+    try:
+
+        subject, html_body = password_reset_email_template(reset_token)
+        email_service.send_email(
+            to_email=email,
+            subject=subject,
+            body=html_body,
+            html=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {email}: {e}")
+
+
+async def forgot_password_handler(
+    request: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ForgotPasswordResponse:
+    """
+    Initiate password reset process.
+
+    Validates user, generates reset token, stores in Redis, and sends email.
+
+    Args:
+        request: Email address for password reset
+        background_tasks: FastAPI background tasks for async email sending
+        auth_service: Auth service for password reset operations
+
+    Returns:
+        ForgotPasswordResponse: Confirmation message
+
+    Raises:
+        UnauthorizedException: If user not found
+        ForbiddenException: If user account is inactive or OAuth-based
+    """
+    # Delegate to service layer
+    result = await auth_service.request_password_reset(request.email)
+
+    # Add email sending to background tasks (non-blocking)
+    # TODO: Make the password reset to a reset link (into the frontend)
+    background_tasks.add_task(
+        send_password_reset_email_task,
+        result.email,
+        result.reset_token,
+    )
+
+    return ForgotPasswordResponse(
+        message="Password reset instructions have been sent to your email.",
+        email=request.email,
+    )
+
+
+async def reset_password_handler(
+    request: ResetPasswordRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> MessageResponse:
+    """
+    Reset user password using reset token.
+
+    Validates token, updates password, and deletes token.
+
+    Args:
+        request: Reset token and new password
+        auth_service: Auth service for password reset operations
+
+    Returns:
+        ResetPasswordResponse: Success message
+
+    Raises:
+        UnauthorizedException: If token is invalid or expired
+    """
+    # Delegate to service layer
+    result = await auth_service.reset_password(
+        token=request.token,
+        new_password=request.new_password,
+    )
+
+    return MessageResponse(message=result.message)
+
+
+async def logout_handler(
+    request: LogoutRequest,
+    access_token: str = Depends(get_logout_tokens),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> MessageResponse:
+    """
+    Logout user by blacklisting both access and refresh tokens.
+
+    This endpoint:
+    - Validates access token from Authorization header
+    - Validates refresh token from request body
+    - Blacklists both tokens in Redis
+
+    Args:
+        request: Logout request containing the refresh token
+        access_token: Access token extracted from Authorization header
+        auth_service: Auth service for logout operations
+
+    Returns:
+        MessageResponse: Success message
+
+    Raises:
+        InvalidAccessTokenException: If tokens are invalid or expired
+        InvalidTokenTypeException: If token types are incorrect
+    """
+    # Delegate to service layer to blacklist both tokens
+    result = await auth_service.logout(access_token, request.refresh_token)
+
+    return MessageResponse(message=result.message)

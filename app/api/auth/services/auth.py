@@ -1,13 +1,18 @@
 """Auth Service Layer"""
 
 import logging
+import time
+import uuid
 
 from fastapi import Depends
 from redis.asyncio import Redis
 
-from app.api.auth.schemas.auth import (
+from app.api.auth.schemas import (
     AuthTokens,
+    LogoutResult,
     OTPVerificationResult,
+    PasswordResetRequestResult,
+    PasswordResetResult,
     TokenRefreshResult,
 )
 from app.api.users.dao.users import UserDAO, get_user_dao
@@ -22,11 +27,13 @@ from app.core.redis import get_redis_client
 from app.core.security.jwt import (
     InvalidTokenError,
     TokenExpiredError,
+    blacklist_jti,
     create_access_token,
     create_refresh_token,
     decode_token,
+    is_jti_blacklisted,
 )
-from app.core.security.password import verify_password
+from app.core.security.password import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +102,17 @@ class AuthService:
                 message="Please verify your account before logging in"
             )
 
-        # Validate password hash exists
+        # Check if account was created via OAuth (Google) and has no password set
+        if not user.password_hash and user.auth_provider == "google":
+            logger.warning(
+                f"Authentication failed: Account created via Google OAuth for {email}"
+            )
+            raise UnauthorizedException(
+                message="This account was created using Google Sign-In. "
+                "Please sign in with Google or set a password for your account."
+            )
+
+        # Validate password hash exists for local accounts
         if not user.password_hash:
             logger.warning(f"Authentication failed: No password hash for {email}")
             raise UnauthorizedException(message="Invalid credentials")
@@ -227,6 +244,15 @@ class AuthService:
             logger.warning(f"Token refresh failed: Invalid token type {token_type}")
             raise InvalidTokenTypeException(message="Refresh token required")
 
+        jti = payload.get("jti")
+
+        if not isinstance(jti, str):
+            raise InvalidAccessTokenException(message="Invalid token payload")
+
+        if await is_jti_blacklisted(jti):
+            logger.warning(f"Token refresh failed: JTI {jti} is blacklisted")
+            raise InvalidAccessTokenException(message="Refresh Token is blacklisted")
+
         # Extract user information from refresh token payload
         user_id = payload.get("sub")
         email = payload.get("email")
@@ -238,13 +264,181 @@ class AuthService:
         }
 
         # Generate new JWT access token
+        # TODO: Inalidate older refresh token
         access_token = create_access_token(payload=new_token_payload)
+        refresh_token = create_refresh_token(payload=new_token_payload)
 
         logger.info(f"Access token refreshed successfully for user {email}")
 
         return TokenRefreshResult(
             access_token=access_token,
+            refresh_token=refresh_token,
         )
+
+    async def request_password_reset(self, email: str) -> PasswordResetRequestResult:
+        """
+        Request password reset and send reset token via email.
+
+        Business logic:
+        - Validates user exists and is active
+        - Generates secure reset token (UUID)
+        - Stores token in Redis with 15-minute TTL
+        - Returns success message (email sending handled by handler)
+
+        Args:
+            email (str): User email address
+
+        Returns:
+            PasswordResetRequestResult: Contains user_id, email, and reset_token for email sending
+
+        Raises:
+            UnauthorizedException: If user not found
+            ForbiddenException: If user account is inactive
+        """
+
+        logger.info(f"Processing password reset request for email: {email}")
+
+        # Fetch user from database by email
+        user = await self._user_dao.get_by_email(email)
+
+        # Validate user exists
+        if not user:
+            logger.warning(f"Password reset failed: User not found for email {email}")
+            raise UnauthorizedException(message="User not found")
+
+        # Validate user account is active
+        if not user.is_active:
+            logger.warning(f"Password reset failed: User account inactive for {email}")
+            raise ForbiddenException(message="User account is inactive")
+
+        # Generate secure reset token
+        reset_token = str(uuid.uuid4())
+
+        # Store token in Redis with 15-minute TTL (900 seconds)
+        redis_key = f"password_reset:{reset_token}"
+        await self._redis.setex(redis_key, 900, user.id)
+
+        logger.info(f"Password reset token generated for user {email}")
+
+        return PasswordResetRequestResult(
+            user_id=user.id,
+            email=email,
+            reset_token=reset_token,
+        )
+
+    async def reset_password(
+        self, token: str, new_password: str
+    ) -> PasswordResetResult:
+        """
+        Reset user password using reset token.
+
+        Business logic:
+        - Validates reset token exists in Redis
+        - Retrieves user ID from token
+        - Hashes new password
+        - Updates password in database
+        - Deletes token from Redis
+
+        Args:
+            token (str): Password reset token
+            new_password (str): New password to set
+
+        Returns:
+            PasswordResetResult: Success message
+
+        Raises:
+            UnauthorizedException: If token is invalid or expired
+        """
+        logger.info("Processing password reset with token")
+
+        # Retrieve user ID from Redis using token
+        redis_key = f"password_reset:{token}"
+        user_id = await self._redis.get(redis_key)
+
+        # Validate token exists in Redis
+        if not user_id:
+            logger.warning("Password reset failed: Invalid or expired token")
+            raise UnauthorizedException(
+                message="Invalid or expired reset token. Please request a new password reset."
+            )
+
+        # Hash new password
+        new_password_hash = hash_password(new_password)
+
+        # Update password in database
+        try:
+            await self._user_dao.update_password(user_id, new_password_hash)
+        except Exception as e:
+            logger.error(f"Failed to update password for user {user_id}: {e}")
+            raise UnauthorizedException(message="Failed to reset password")
+
+        # Delete token from Redis after successful password reset
+        await self._redis.delete(redis_key)
+
+        logger.info(f"Password reset successfully for user {user_id}")
+
+        return PasswordResetResult(message="Password reset successfully")
+
+    async def logout(self, access_token: str, refresh_token: str) -> LogoutResult:
+        """
+        Logout user by blacklisting both access and refresh tokens.
+
+        Business logic:
+        - Validates refresh token
+        - Extracts JTI from both tokens
+        - Blacklists both tokens in Redis with remaining TTL
+
+        Args:
+            access_token (str): The access token to blacklist
+            refresh_token (str): The refresh token to validate and blacklist
+
+        Returns:
+            LogoutResult: Success message
+
+        Raises:
+            InvalidAccessTokenException: If tokens are expired or invalid
+            InvalidTokenTypeException: If refresh token type is not REFRESH
+        """
+        logger.info("Processing logout request")
+
+        try:
+            access_payload = decode_token(access_token)
+            refresh_payload = decode_token(refresh_token)
+
+            # Validate refresh token type
+            if refresh_payload.get("type") != TokenType.REFRESH.value:
+                logger.warning("Logout failed: Invalid refresh token type")
+                raise InvalidTokenTypeException(message="Refresh token required")
+
+            # Extract required fields
+            access_jti = access_payload.get("jti")
+            refresh_jti = refresh_payload.get("jti")
+
+            if not access_jti or not refresh_jti:
+                raise InvalidTokenError("Token does not contain JTI")
+
+            # Calculate remaining TTLs
+            now = int(time.time())
+            access_ttl = access_payload["exp"] - now
+            refresh_ttl = refresh_payload["exp"] - now
+
+            # Blacklist both tokens
+            await blacklist_jti(access_jti, access_ttl)
+            await blacklist_jti(refresh_jti, refresh_ttl)
+
+        except TokenExpiredError as e:
+            logger.warning(f"Logout failed: {str(e)}")
+            raise InvalidAccessTokenException(message="Token has expired")
+        except InvalidTokenError as e:
+            logger.warning(f"Logout failed: {str(e)}")
+            raise InvalidAccessTokenException(message="Invalid token")
+        except InvalidTokenTypeException:
+            # Re-raise token type exception
+            raise
+
+        logger.info("User logged out successfully - both tokens blacklisted")
+
+        return LogoutResult(message="Logged out successfully")
 
 
 async def get_auth_service(
