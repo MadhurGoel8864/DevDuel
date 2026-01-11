@@ -108,6 +108,38 @@ class TokenRefreshResult(BaseModel):
         from_attributes = True
 
 
+class PasswordResetRequestResult(BaseModel):
+    """
+    Data model for password reset request result.
+
+    Used by the service layer to return reset token data for email sending.
+    """
+
+    user_id: str
+    email: str
+    reset_token: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class PasswordResetResult(BaseModel):
+    """
+    Data model for password reset completion result.
+
+    Used by the service layer to return success message.
+    """
+
+    message: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
 class LoginRequest(BaseModel):
     """
     Request schema for user login.
@@ -216,3 +248,50 @@ class SendOTPResponse(BaseModel):
 
     message: str
     email: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """
+    Request schema for initiating password reset.
+
+    Contains the user's email address to send password reset instructions.
+    """
+
+    email: EmailStr
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class ForgotPasswordResponse(BaseModel):
+    """
+    Response schema for password reset request.
+
+    Returns confirmation that reset instructions were sent.
+    """
+
+    message: str
+    email: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class ResetPasswordRequest(BaseModel):
+    """
+    Request schema for resetting password with token.
+
+    Contains the reset token and new password.
+    """
+
+    token: str
+    new_password: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True

@@ -1,13 +1,16 @@
 """Auth Service Layer"""
 
 import logging
+import uuid
 
 from fastapi import Depends
 from redis.asyncio import Redis
 
-from app.api.auth.schemas.auth import (
+from app.api.auth.schemas import (
     AuthTokens,
     OTPVerificationResult,
+    PasswordResetRequestResult,
+    PasswordResetResult,
     TokenRefreshResult,
 )
 from app.api.users.dao.users import UserDAO, get_user_dao
@@ -26,7 +29,7 @@ from app.core.security.jwt import (
     create_refresh_token,
     decode_token,
 )
-from app.core.security.password import verify_password
+from app.core.security.password import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +258,110 @@ class AuthService:
         return TokenRefreshResult(
             access_token=access_token,
         )
+
+    async def request_password_reset(self, email: str) -> PasswordResetRequestResult:
+        """
+        Request password reset and send reset token via email.
+
+        Business logic:
+        - Validates user exists and is active
+        - Generates secure reset token (UUID)
+        - Stores token in Redis with 15-minute TTL
+        - Returns success message (email sending handled by handler)
+
+        Args:
+            email (str): User email address
+
+        Returns:
+            PasswordResetRequestResult: Contains user_id, email, and reset_token for email sending
+
+        Raises:
+            UnauthorizedException: If user not found
+            ForbiddenException: If user account is inactive
+        """
+
+        logger.info(f"Processing password reset request for email: {email}")
+
+        # Fetch user from database by email
+        user = await self._user_dao.get_by_email(email)
+
+        # Validate user exists
+        if not user:
+            logger.warning(f"Password reset failed: User not found for email {email}")
+            raise UnauthorizedException(message="User not found")
+
+        # Validate user account is active
+        if not user.is_active:
+            logger.warning(f"Password reset failed: User account inactive for {email}")
+            raise ForbiddenException(message="User account is inactive")
+
+        # Generate secure reset token
+        reset_token = str(uuid.uuid4())
+
+        # Store token in Redis with 15-minute TTL (900 seconds)
+        redis_key = f"password_reset:{reset_token}"
+        await self._redis.setex(redis_key, 900, user.id)
+
+        logger.info(f"Password reset token generated for user {email}")
+
+        return PasswordResetRequestResult(
+            user_id=user.id,
+            email=email,
+            reset_token=reset_token,
+        )
+
+    async def reset_password(
+        self, token: str, new_password: str
+    ) -> PasswordResetResult:
+        """
+        Reset user password using reset token.
+
+        Business logic:
+        - Validates reset token exists in Redis
+        - Retrieves user ID from token
+        - Hashes new password
+        - Updates password in database
+        - Deletes token from Redis
+
+        Args:
+            token (str): Password reset token
+            new_password (str): New password to set
+
+        Returns:
+            PasswordResetResult: Success message
+
+        Raises:
+            UnauthorizedException: If token is invalid or expired
+        """
+        logger.info("Processing password reset with token")
+
+        # Retrieve user ID from Redis using token
+        redis_key = f"password_reset:{token}"
+        user_id = await self._redis.get(redis_key)
+
+        # Validate token exists in Redis
+        if not user_id:
+            logger.warning("Password reset failed: Invalid or expired token")
+            raise UnauthorizedException(
+                message="Invalid or expired reset token. Please request a new password reset."
+            )
+
+        # Hash new password
+        new_password_hash = hash_password(new_password)
+
+        # Update password in database
+        try:
+            await self._user_dao.update_password(user_id, new_password_hash)
+        except Exception as e:
+            logger.error(f"Failed to update password for user {user_id}: {e}")
+            raise UnauthorizedException(message="Failed to reset password")
+
+        # Delete token from Redis after successful password reset
+        await self._redis.delete(redis_key)
+
+        logger.info(f"Password reset successfully for user {user_id}")
+
+        return PasswordResetResult(message="Password reset successfully")
 
 
 async def get_auth_service(

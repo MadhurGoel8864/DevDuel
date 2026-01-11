@@ -11,11 +11,14 @@ from fastapi import BackgroundTasks, Depends
 
 from app.api.auth.dependencies import get_current_user, get_platform_type
 from app.api.auth.schemas import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     LoginResponse,
     ProtectedRouteResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
+    ResetPasswordRequest,
     SendOTPRequest,
     SendOTPResponse,
     UserProfileResponse,
@@ -24,10 +27,14 @@ from app.api.auth.schemas import (
     VerifyOTPResponse,
 )
 from app.api.auth.services import AuthService, get_auth_service
+from app.api.common.responses import MessageResponse
 from app.api.users.services.users import UserService, get_user_service
 from app.core.enums import PlatformType
 from app.services.email import email_service
-from app.services.email.templates import otp_email_template
+from app.services.email.templates import (
+    otp_email_template,
+    password_reset_email_template,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -268,3 +275,93 @@ async def resend_otp_handler(
             message="User is already verified. No OTP needed.",
             email=request.email,
         )
+
+
+def send_password_reset_email_task(email: str, reset_token: str) -> None:
+    """
+    Background task to send password reset email.
+
+    This runs asynchronously without blocking the HTTP response.
+
+    Args:
+        email: Recipient email address
+        reset_token: The password reset token to send
+    """
+    try:
+
+        subject, html_body = password_reset_email_template(reset_token)
+        email_service.send_email(
+            to_email=email,
+            subject=subject,
+            body=html_body,
+            html=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {email}: {e}")
+
+
+async def forgot_password_handler(
+    request: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ForgotPasswordResponse:
+    """
+    Initiate password reset process.
+
+    Validates user, generates reset token, stores in Redis, and sends email.
+
+    Args:
+        request: Email address for password reset
+        background_tasks: FastAPI background tasks for async email sending
+        auth_service: Auth service for password reset operations
+
+    Returns:
+        ForgotPasswordResponse: Confirmation message
+
+    Raises:
+        UnauthorizedException: If user not found
+        ForbiddenException: If user account is inactive or OAuth-based
+    """
+    # Delegate to service layer
+    result = await auth_service.request_password_reset(request.email)
+
+    # Add email sending to background tasks (non-blocking)
+    # TODO: Make the password reset to a reset link (into the frontend)
+    background_tasks.add_task(
+        send_password_reset_email_task,
+        result.email,
+        result.reset_token,
+    )
+
+    return ForgotPasswordResponse(
+        message="Password reset instructions have been sent to your email.",
+        email=request.email,
+    )
+
+
+async def reset_password_handler(
+    request: ResetPasswordRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> MessageResponse:
+    """
+    Reset user password using reset token.
+
+    Validates token, updates password, and deletes token.
+
+    Args:
+        request: Reset token and new password
+        auth_service: Auth service for password reset operations
+
+    Returns:
+        ResetPasswordResponse: Success message
+
+    Raises:
+        UnauthorizedException: If token is invalid or expired
+    """
+    # Delegate to service layer
+    result = await auth_service.reset_password(
+        token=request.token,
+        new_password=request.new_password,
+    )
+
+    return MessageResponse(message=result.message)

@@ -1,13 +1,21 @@
 """Auth schemas module."""
 
 from app.api.auth.schemas.auth import (
+    AuthTokens,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     LoginResponse,
+    OTPVerificationResult,
+    PasswordResetRequestResult,
+    PasswordResetResult,
     ProtectedRouteResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
+    ResetPasswordRequest,
     SendOTPRequest,
     SendOTPResponse,
+    TokenRefreshResult,
     UserProfileResponse,
     UserWithPermissions,
     VerifyOTPRequest,

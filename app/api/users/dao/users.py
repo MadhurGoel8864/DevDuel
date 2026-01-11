@@ -185,6 +185,34 @@ class UserDAO:
             logger.error(f"Failed to create OAuth user: {e}")
             raise e
 
+    async def update_password(self, user_id: str, new_password_hash: str) -> User:
+        """
+        Update user's password hash.
+
+        Args:
+            user_id (str): User ID to update.
+            new_password_hash (str): New hashed password.
+
+        Returns:
+            User: Updated user instance.
+
+        Raises:
+            Exception: If database operation fails or user not found.
+        """
+        try:
+            user = await self.get_by_id(user_id)
+            if not user:
+                raise ValueError(f"User with ID {user_id} not found")
+
+            user.password_hash = new_password_hash
+            await self._session.commit()
+            await self._session.refresh(user)
+            return user
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to update password for user {user_id}: {e}")
+            raise e
+
 
 # Dependency
 async def get_user_dao(session: AsyncSession = Depends(get_db)) -> UserDAO:
