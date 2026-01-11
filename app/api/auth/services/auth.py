@@ -253,6 +253,11 @@ class AuthService:
             logger.warning(f"Token refresh failed: JTI {jti} is blacklisted")
             raise InvalidAccessTokenException(message="Refresh Token is blacklisted")
 
+        # Calculate remaining TTLs
+        now = int(time.time())
+        refresh_ttl = payload["exp"] - now
+        await blacklist_jti(jti, refresh_ttl)
+
         # Extract user information from refresh token payload
         user_id = payload.get("sub")
         email = payload.get("email")
@@ -264,7 +269,6 @@ class AuthService:
         }
 
         # Generate new JWT access token
-        # TODO: Inalidate older refresh token
         access_token = create_access_token(payload=new_token_payload)
         refresh_token = create_refresh_token(payload=new_token_payload)
 
