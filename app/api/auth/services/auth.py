@@ -1,6 +1,7 @@
 """Auth Service Layer"""
 
 import logging
+import time
 import uuid
 
 from fastapi import Depends
@@ -8,6 +9,7 @@ from redis.asyncio import Redis
 
 from app.api.auth.schemas import (
     AuthTokens,
+    LogoutResult,
     OTPVerificationResult,
     PasswordResetRequestResult,
     PasswordResetResult,
@@ -25,9 +27,11 @@ from app.core.redis import get_redis_client
 from app.core.security.jwt import (
     InvalidTokenError,
     TokenExpiredError,
+    blacklist_jti,
     create_access_token,
     create_refresh_token,
     decode_token,
+    is_jti_blacklisted,
 )
 from app.core.security.password import hash_password, verify_password
 
@@ -240,6 +244,15 @@ class AuthService:
             logger.warning(f"Token refresh failed: Invalid token type {token_type}")
             raise InvalidTokenTypeException(message="Refresh token required")
 
+        jti = payload.get("jti")
+
+        if not isinstance(jti, str):
+            raise InvalidAccessTokenException(message="Invalid token payload")
+
+        if await is_jti_blacklisted(jti):
+            logger.warning(f"Token refresh failed: JTI {jti} is blacklisted")
+            raise InvalidAccessTokenException(message="Refresh Token is blacklisted")
+
         # Extract user information from refresh token payload
         user_id = payload.get("sub")
         email = payload.get("email")
@@ -251,12 +264,15 @@ class AuthService:
         }
 
         # Generate new JWT access token
+        # TODO: Inalidate older refresh token
         access_token = create_access_token(payload=new_token_payload)
+        refresh_token = create_refresh_token(payload=new_token_payload)
 
         logger.info(f"Access token refreshed successfully for user {email}")
 
         return TokenRefreshResult(
             access_token=access_token,
+            refresh_token=refresh_token,
         )
 
     async def request_password_reset(self, email: str) -> PasswordResetRequestResult:
@@ -362,6 +378,67 @@ class AuthService:
         logger.info(f"Password reset successfully for user {user_id}")
 
         return PasswordResetResult(message="Password reset successfully")
+
+    async def logout(self, access_token: str, refresh_token: str) -> LogoutResult:
+        """
+        Logout user by blacklisting both access and refresh tokens.
+
+        Business logic:
+        - Validates refresh token
+        - Extracts JTI from both tokens
+        - Blacklists both tokens in Redis with remaining TTL
+
+        Args:
+            access_token (str): The access token to blacklist
+            refresh_token (str): The refresh token to validate and blacklist
+
+        Returns:
+            LogoutResult: Success message
+
+        Raises:
+            InvalidAccessTokenException: If tokens are expired or invalid
+            InvalidTokenTypeException: If refresh token type is not REFRESH
+        """
+        logger.info("Processing logout request")
+
+        try:
+            access_payload = decode_token(access_token)
+            refresh_payload = decode_token(refresh_token)
+
+            # Validate refresh token type
+            if refresh_payload.get("type") != TokenType.REFRESH.value:
+                logger.warning("Logout failed: Invalid refresh token type")
+                raise InvalidTokenTypeException(message="Refresh token required")
+
+            # Extract required fields
+            access_jti = access_payload.get("jti")
+            refresh_jti = refresh_payload.get("jti")
+
+            if not access_jti or not refresh_jti:
+                raise InvalidTokenError("Token does not contain JTI")
+
+            # Calculate remaining TTLs
+            now = int(time.time())
+            access_ttl = access_payload["exp"] - now
+            refresh_ttl = refresh_payload["exp"] - now
+
+            # Blacklist both tokens
+            await blacklist_jti(access_jti, access_ttl)
+            await blacklist_jti(refresh_jti, refresh_ttl)
+
+        except TokenExpiredError as e:
+            logger.warning(f"Logout failed: {str(e)}")
+            raise InvalidAccessTokenException(message="Token has expired")
+        except InvalidTokenError as e:
+            logger.warning(f"Logout failed: {str(e)}")
+            raise InvalidAccessTokenException(message="Invalid token")
+        except InvalidTokenTypeException:
+            # Re-raise token type exception
+            raise
+
+        logger.info("User logged out successfully - both tokens blacklisted")
+
+        return LogoutResult(message="Logged out successfully")
 
 
 async def get_auth_service(

@@ -6,6 +6,8 @@ from app.api.auth.schemas.auth import (
     ForgotPasswordResponse,
     LoginRequest,
     LoginResponse,
+    LogoutRequest,
+    LogoutResult,
     OTPVerificationResult,
     PasswordResetRequestResult,
     PasswordResetResult,

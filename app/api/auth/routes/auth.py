@@ -1,12 +1,12 @@
 """Authentication API Routes"""
 
-# TODO: Add logout
 from fastapi import APIRouter
 
 from app.api.auth.handlers import (
     forgot_password_handler,
     get_profile_handler,
     login_handler,
+    logout_handler,
     protected_route_handler,
     refresh_token_handler,
     resend_otp_handler,
@@ -19,6 +19,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # Authentication URLs
 router.add_api_route("/login", login_handler, methods=["POST"])
+router.add_api_route("/logout", logout_handler, methods=["POST"])
 router.add_api_route("/refresh", refresh_token_handler, methods=["POST"])
 router.add_api_route("/verify-otp", verify_otp_handler, methods=["POST"])
 router.add_api_route("/me", get_profile_handler, methods=["GET"])

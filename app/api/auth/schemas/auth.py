@@ -101,6 +101,7 @@ class TokenRefreshResult(BaseModel):
     """
 
     access_token: str
+    refresh_token: str
 
     class Config:
         """Pydantic configuration."""
@@ -196,6 +197,7 @@ class RefreshTokenResponse(BaseModel):
     """
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
     class Config:
@@ -290,6 +292,36 @@ class ResetPasswordRequest(BaseModel):
 
     token: str
     new_password: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class LogoutRequest(BaseModel):
+    """
+    Request schema for user logout.
+
+    Contains the refresh token to validate and blacklist along with access token.
+    """
+
+    refresh_token: str
+
+    class Config:
+        """Pydantic configuration."""
+
+        from_attributes = True
+
+
+class LogoutResult(BaseModel):
+    """
+    Data model for logout result.
+
+    Used by the service layer to return logout success message.
+    """
+
+    message: str
 
     class Config:
         """Pydantic configuration."""

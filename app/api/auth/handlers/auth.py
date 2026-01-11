@@ -9,12 +9,17 @@ import random
 
 from fastapi import BackgroundTasks, Depends
 
-from app.api.auth.dependencies import get_current_user, get_platform_type
+from app.api.auth.dependencies import (
+    get_current_user,
+    get_logout_tokens,
+    get_platform_type,
+)
 from app.api.auth.schemas import (
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     LoginRequest,
     LoginResponse,
+    LogoutRequest,
     ProtectedRouteResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
@@ -143,7 +148,9 @@ async def refresh_token_handler(
     # Delegate token refresh to service layer
     result = await auth_service.refresh_access_token(request.refresh_token)
 
-    return RefreshTokenResponse(access_token=result.access_token)
+    return RefreshTokenResponse(
+        access_token=result.access_token, refresh_token=result.refresh_token
+    )
 
 
 async def verify_otp_handler(
@@ -363,5 +370,36 @@ async def reset_password_handler(
         token=request.token,
         new_password=request.new_password,
     )
+
+    return MessageResponse(message=result.message)
+
+
+async def logout_handler(
+    request: LogoutRequest,
+    access_token: str = Depends(get_logout_tokens),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> MessageResponse:
+    """
+    Logout user by blacklisting both access and refresh tokens.
+
+    This endpoint:
+    - Validates access token from Authorization header
+    - Validates refresh token from request body
+    - Blacklists both tokens in Redis
+
+    Args:
+        request: Logout request containing the refresh token
+        access_token: Access token extracted from Authorization header
+        auth_service: Auth service for logout operations
+
+    Returns:
+        MessageResponse: Success message
+
+    Raises:
+        InvalidAccessTokenException: If tokens are invalid or expired
+        InvalidTokenTypeException: If token types are incorrect
+    """
+    # Delegate to service layer to blacklist both tokens
+    result = await auth_service.logout(access_token, request.refresh_token)
 
     return MessageResponse(message=result.message)

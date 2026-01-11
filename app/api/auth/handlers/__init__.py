@@ -4,6 +4,7 @@ from app.api.auth.handlers.auth import (
     forgot_password_handler,
     get_profile_handler,
     login_handler,
+    logout_handler,
     protected_route_handler,
     refresh_token_handler,
     resend_otp_handler,
