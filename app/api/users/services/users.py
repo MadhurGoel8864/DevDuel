@@ -89,6 +89,7 @@ class UserService:
         user = await self._user_dao.create(
             email=user_data.email,
             full_name=user_data.full_name,
+            dob=user_data.dob,
             password_hash=password_hash,
         )
 

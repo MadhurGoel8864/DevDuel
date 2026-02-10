@@ -1,6 +1,6 @@
 """User API Schemas"""
 
-from datetime import datetime
+from datetime import datetime ,date
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
@@ -34,6 +34,7 @@ class UserCreateData(BaseSchema):
 
     email: EmailStr
     full_name: str
+    dob: date
     password: str
 
 
@@ -53,6 +54,7 @@ class UserBaseData(BaseSchema):
     id: str
     email: EmailStr
     full_name: str
+    dob: date
     is_active: bool
     is_verified: bool
 

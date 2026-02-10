@@ -2,6 +2,7 @@
 
 import logging
 from typing import Optional
+from datetime import date
 
 from fastapi import Depends
 from sqlalchemy import select
@@ -25,7 +26,7 @@ class UserDAO:
         """
         self._session = session
 
-    async def create(self, email: str, full_name: str, password_hash: str) -> User:
+    async def create(self, email: str, full_name: str, dob :date, password_hash: str) -> User:
         """
         Create a new user in the database.
 
@@ -46,6 +47,7 @@ class UserDAO:
                 full_name=full_name,
                 password_hash=password_hash,
                 is_verified=False,
+                dob=dob,
             )
             self._session.add(user)
             await self._session.commit()

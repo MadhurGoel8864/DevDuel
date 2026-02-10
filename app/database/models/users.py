@@ -1,5 +1,6 @@
-from sqlalchemy import String
+from sqlalchemy import String ,Date
 from sqlalchemy.orm import Mapped, mapped_column
+from datetime import date
 
 from app.database.models.base import Base
 from app.database.models.mixins import TimestampMixin
@@ -13,6 +14,7 @@ class User(Base, TimestampMixin):
         String(255), unique=True, index=True, nullable=False
     )
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dob: Mapped[date | None]=mapped_column(Date ,nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
     is_verified: Mapped[bool] = mapped_column(default=False)
