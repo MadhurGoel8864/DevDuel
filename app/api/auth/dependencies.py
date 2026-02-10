@@ -135,6 +135,7 @@ async def get_current_user(
         return UserWithPermissions(
             user_id=user.id,
             email=user.email,
+            username=user.username,
             role=UserRole.USER,  # Default role
             permissions=[],  # Empty permissions for now
             is_active=user.is_active,

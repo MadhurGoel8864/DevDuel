@@ -52,9 +52,12 @@ class UserBaseData(BaseSchema):
 
     id: str
     email: EmailStr
+    username: str
     full_name: str
+    role: str
     is_active: bool
     is_verified: bool
+    profile_img_url: str | None = None
 
 
 class UserCreateResponseData(UserBaseData, ISTDatetimeMixin):
@@ -72,6 +75,8 @@ class UserGetResponseData(UserBaseData, ISTDatetimeMixin):
 
     created_at: datetime
     updated_at: datetime
+    last_login_at: datetime | None = None
+    email_verified_at: datetime | None = None
 
 
 # Remove

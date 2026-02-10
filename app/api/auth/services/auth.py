@@ -132,6 +132,14 @@ class AuthService:
         access_token = create_access_token(payload=token_payload)
         refresh_token = create_refresh_token(payload=token_payload)
 
+        # Update last login timestamp
+        try:
+            await self._user_dao.update_last_login(user.id)
+            logger.info(f"Updated last_login_at for user {email}")
+        except Exception as e:
+            # Log error but don't fail authentication
+            logger.error(f"Failed to update last_login_at for user {email}: {e}")
+
         logger.info(f"User {email} authenticated successfully")
 
         return AuthTokens(

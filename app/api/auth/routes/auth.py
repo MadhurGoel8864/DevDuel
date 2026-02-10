@@ -50,5 +50,5 @@ router.add_api_route(
     resend_otp_handler,
     methods=["POST"],
     summary="Resend OTP for Account Verification",
-    description="Resend OTP to user's email for account verification. Returns appropriate message if user is already verified.",
+    description="Resend OTP to user's email for account verification.",
 )
