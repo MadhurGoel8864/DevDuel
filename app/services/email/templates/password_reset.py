@@ -122,7 +122,8 @@ def password_reset_email_template(reset_token: str) -> tuple[str, str]:
                 <div class="warning-title">⚠️ Security Warning</div>
                 <div>
                     Never share this reset token with anyone. Our team will never ask for your reset token.
-                    If you didn't request a password reset, please ignore this email and your password will remain unchanged.
+                    If you didn't request a password reset,
+                    please ignore this email and your password will remain unchanged.
                 </div>
             </div>
 

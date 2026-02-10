@@ -92,7 +92,8 @@ def otp_email_template(otp: str) -> tuple[str, str]:
 
             <p>Hello,</p>
 
-            <p>You have requested a one-time password (OTP) for verification. Please use the code below to complete your verification:</p>
+            <p>You have requested a one-time password (OTP) for verification.
+            Please use the code below to complete your verification:</p>
 
             <div class="otp-box">
                 <div style="color: #7f8c8d; font-size: 14px; margin-bottom: 10px;">YOUR OTP CODE</div>
