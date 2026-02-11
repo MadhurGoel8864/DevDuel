@@ -6,6 +6,7 @@ import httpx
 from fastapi import Depends
 from redis.asyncio import Redis
 
+from app.api.users.dao.users import UserDAO, get_user_dao
 from app.api.users.services import UserService, get_user_service
 from app.core.config import settings
 from app.core.exceptions import BadRequestException
@@ -16,12 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 class GoogleOAuthService:
-    def __init__(self, redis: Redis, user_service: UserService):
+    def __init__(self, redis: Redis, user_service: UserService, user_dao: UserDAO):
         self._AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
         self._TOKEN_URL = "https://oauth2.googleapis.com/token"
         self._USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
         self._redis = redis
         self._user_service = user_service
+        self._user_dao = user_dao
 
     async def authenticate_google_user(self, code: str) -> User:
         token_data = await self.exchange_code_for_token(code)
@@ -33,6 +35,16 @@ class GoogleOAuthService:
             provider_user_id=user_info["sub"],
             full_name=user_info.get("name"),
         )
+
+        # Update last login timestamp
+        try:
+            await self._user_dao.update_last_login(user.id)
+            logger.info(f"Updated last_login_at for OAuth user {user.email}")
+        except Exception as e:
+            # Log error but don't fail authentication
+            logger.error(
+                f"Failed to update last_login_at for OAuth user {user.email}: {e}"
+            )
 
         return user
 
@@ -89,6 +101,7 @@ class GoogleOAuthService:
 async def get_google_oauth_auth_service(
     redis: Redis = Depends(get_redis_client),
     user_service: UserService = Depends(get_user_service),
+    user_dao: UserDAO = Depends(get_user_dao),
 ) -> GoogleOAuthService:
     """
     FastAPI dependency to provide an AuthService instance.
@@ -101,4 +114,4 @@ async def get_google_oauth_auth_service(
     Returns:
         AuthService: Service instance ready to use in route handlers.
     """
-    return GoogleOAuthService(redis=redis, user_service=user_service)
+    return GoogleOAuthService(redis=redis, user_service=user_service, user_dao=user_dao)

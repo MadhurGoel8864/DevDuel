@@ -82,12 +82,17 @@ class UserService:
         if existing_user:
             raise UserAlreadyExistsException(email=user_data.email)
 
+        # Generate unique username from email using DAO
+        username = await self._user_dao.generate_unique_username(user_data.email)
+        logger.info(f"Generated username: {username} for email: {user_data.email}")
+
         # Hash the password before storing
         password_hash = hash_password(user_data.password)
 
         # Delegate to DAO
         user = await self._user_dao.create(
             email=user_data.email,
+            username=username,
             full_name=user_data.full_name,
             password_hash=password_hash,
         )
@@ -226,8 +231,13 @@ class UserService:
             return user
 
         # Case 3: First-time OAuth login → create user
+        # Generate unique username from email using DAO
+        username = await self._user_dao.generate_unique_username(email)
+        logger.info(f"Generated username: {username} for OAuth user: {email}")
+
         return await self._user_dao.create_oauth_user(
             email=email,
+            username=username,
             full_name=full_name,
             provider=provider,
             provider_user_id=provider_user_id,

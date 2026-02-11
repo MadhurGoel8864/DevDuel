@@ -132,6 +132,14 @@ class AuthService:
         access_token = create_access_token(payload=token_payload)
         refresh_token = create_refresh_token(payload=token_payload)
 
+        # Update last login timestamp
+        try:
+            await self._user_dao.update_last_login(user.id)
+            logger.info(f"Updated last_login_at for user {email}")
+        except Exception as e:
+            # Log error but don't fail authentication
+            logger.error(f"Failed to update last_login_at for user {email}: {e}")
+
         logger.info(f"User {email} authenticated successfully")
 
         return AuthTokens(
@@ -253,6 +261,11 @@ class AuthService:
             logger.warning(f"Token refresh failed: JTI {jti} is blacklisted")
             raise InvalidAccessTokenException(message="Refresh Token is blacklisted")
 
+        # Calculate remaining TTLs
+        now = int(time.time())
+        refresh_ttl = payload["exp"] - now
+        await blacklist_jti(jti, refresh_ttl)
+
         # Extract user information from refresh token payload
         user_id = payload.get("sub")
         email = payload.get("email")
@@ -264,7 +277,6 @@ class AuthService:
         }
 
         # Generate new JWT access token
-        # TODO: Inalidate older refresh token
         access_token = create_access_token(payload=new_token_payload)
         refresh_token = create_refresh_token(payload=new_token_payload)
 
