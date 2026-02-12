@@ -75,35 +75,30 @@
 # black = "^26.1.0"
 # mypy = "^1.19.1"
 
-[project]
+[tool.poetry]
 name = "gopool-backend"
 version = "0.1.0"
 description = ""
-authors = [
-    { name = "garimagupta-unthinkable", email = "garima.gupta@unthinkable.co" }
-]
-readme = "README.md"
-requires-python = ">=3.11"
-
-dependencies = [
-    "fastapi (>=0.128.0,<0.129.0)",
-    "uvicorn[standard] (>=0.40.0,<0.41.0)",
-    "pydantic-settings (>=2.12.0,<3.0.0)",
-    "sqlalchemy (>=2.0.45,<3.0.0)",
-    "sqlmodel (>=0.0.31,<0.0.32)",
-    "asyncpg (>=0.31.0,<0.32.0)",
-    "alembic (>=1.17.2,<2.0.0)",
-    "email-validator (>=2.3.0,<3.0.0)",
-    "pyjwt (>=2.8.0,<3.0.0)",
-    "passlib[bcrypt] (>=1.7.4,<2.0.0)",
-    "bcrypt (==3.2.2)",
-    "redis (>=5.0.1,<6.0.0)",
-    "httpx (>=0.28.1,<0.29.0)",
-    "tzdata (>=2024.2,<2025.0)"
-]
-
-[tool.poetry]
+authors = ["garimagupta-unthinkable <garima.gupta@unthinkable.co>"]
 package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.11,<4.0"
+fastapi = "^0.128.0"
+uvicorn = {extras = ["standard"], version = "^0.40.0"}
+pydantic-settings = "^2.12.0"
+sqlalchemy = "^2.0.45"
+sqlmodel = "^0.0.31"
+asyncpg = "^0.31.0"
+alembic = "^1.17.2"
+email-validator = "^2.3.0"
+pyjwt = "^2.8.0"
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+bcrypt = "3.2.2"
+redis = "^5.0.1"
+httpx = "^0.28.1"
+tzdata = "^2024.2"
+psycopg = "^3.3.2"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "^7.3.0"
@@ -112,23 +107,6 @@ mypy = "^1.19.1"
 black = "^26.1.0"
 isort = "^7.0.0"
 
-[tool.flake8]
-exclude = [
-    "venv",
-    ".venv",
-    "__pycache__",
-    ".git",
-    ".mypy_cache",
-    ".pytest_cache",
-    "__init__.py",
-]
-max-line-length = 88
-extend-ignore = ["E203", "W503"]
-
-[tool.mypy]
-plugins = ["pydantic.mypy"]
-
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires = ["poetry-core>=1.9.0"]
 build-backend = "poetry.core.masonry.api"
-
