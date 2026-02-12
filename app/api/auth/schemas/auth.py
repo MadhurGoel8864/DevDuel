@@ -17,10 +17,12 @@ class UserWithPermissions(BaseModel):
 
     user_id: str
     email: EmailStr
+    username: str
     role: UserRole
     permissions: list[str]
     is_active: bool
     is_verified: bool
+    profile_img_url: str | None = None
 
     class Config:
         """Pydantic configuration."""
@@ -37,10 +39,13 @@ class UserProfileResponse(BaseModel):
 
     user_id: str
     email: EmailStr
+    username: str
     role: UserRole
     permissions: list[str]
     is_active: bool
     is_verified: bool
+    profile_img_url: str | None = None
+    last_login_at: str | None = None
 
     class Config:
         """Pydantic configuration."""

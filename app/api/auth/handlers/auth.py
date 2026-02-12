@@ -65,6 +65,7 @@ async def get_profile_handler(
         user_id=current_user.user_id,
         email=current_user.email,
         role=current_user.role,
+        username=current_user.username,
         permissions=current_user.permissions,
         is_active=current_user.is_active,
         is_verified=current_user.is_verified,
