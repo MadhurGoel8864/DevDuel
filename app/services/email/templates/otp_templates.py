@@ -4,6 +4,7 @@ Email templates for various use cases.
 
 This module provides functions to generate email content for different scenarios.
 """
+
 from app.core.config import settings
 
 
