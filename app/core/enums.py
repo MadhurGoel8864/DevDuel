@@ -18,3 +18,8 @@ class PlatformType(str, Enum):
 
     WEB = "web"
     APP = "app"
+
+
+class TeamRole(str, Enum):
+    BIDDING = "BIDDING"
+    CODING = "CODING"
