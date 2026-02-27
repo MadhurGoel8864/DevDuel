@@ -21,8 +21,8 @@ class Contest(Base, TimestampMixin):
     name = mapped_column(String(100), nullable=False)
     description = mapped_column(String(255), nullable=True)
 
-    start_time = mapped_column(DateTime, nullable=False)
-    end_time = mapped_column(DateTime, nullable=False)
+    start_time = mapped_column(DateTime(timezone=True), nullable=False)
+    end_time = mapped_column(DateTime(timezone=True), nullable=False)
 
     is_active = mapped_column(Boolean, default=True, nullable=False)
 

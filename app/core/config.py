@@ -9,6 +9,14 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False)
     env: str = Field(default="development")
 
+    # CORS
+    allowed_origins: str = Field(default="http://localhost:3000")
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Parse pipe-separated origins from env: 'http://a.com|http://b.com'"""
+        return [o.strip() for o in self.allowed_origins.split("|") if o.strip()]
+
     # Security
     secret_key: str
     access_token_expire_minutes: int = 30
