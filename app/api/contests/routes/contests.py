@@ -4,13 +4,16 @@ from fastapi import APIRouter
 
 from app.api.contests.handlers.contests import (
     create_contest_handler,
+    end_contest_handler,
     get_contest_handler,
     get_contest_leaderboard_handler,
     get_my_contests_handler,
     get_team_in_contest_handler,
     list_active_contests_handler,
     list_contests_handler,
+    open_registration_handler,
     register_team_handler,
+    start_contest_handler,
 )
 
 router = APIRouter(prefix="/contests", tags=["Contests"])
@@ -30,4 +33,20 @@ router.add_api_route(
 )
 router.add_api_route(
     "/{contest_id}/teams/{team_id}", get_team_in_contest_handler, methods=["GET"]
+)
+# Admin lifecycle transitions
+router.add_api_route(
+    "/{contest_id}/open-registration",
+    open_registration_handler,
+    methods=["POST"],
+)
+router.add_api_route(
+    "/{contest_id}/start",
+    start_contest_handler,
+    methods=["POST"],
+)
+router.add_api_route(
+    "/{contest_id}/end",
+    end_contest_handler,
+    methods=["POST"],
 )

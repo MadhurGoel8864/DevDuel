@@ -89,3 +89,22 @@ class NotTeamCreatorException(AppException):
             message=message or "Only the team creator can perform this action",
             status_code=403,
         )
+
+
+class CannotModifyTeamDuringActiveContest(AppException):
+    """Raised when a team roster/deletion is attempted while the team is in an ACTIVE contest. HTTP 409."""
+
+    def __init__(self, team_id: Optional[str] = None, contest_id: Optional[str] = None):
+        details: Optional[dict] = None
+        if team_id or contest_id:
+            details = {}
+            if team_id:
+                details["team_id"] = team_id
+            if contest_id:
+                details["contest_id"] = contest_id
+        super().__init__(
+            code="CANNOT_MODIFY_TEAM_DURING_ACTIVE_CONTEST",
+            message="Team cannot be modified while participating in an active contest",
+            status_code=409,
+            details=details,
+        )

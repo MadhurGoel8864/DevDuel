@@ -12,15 +12,38 @@ from app.api.contests.dao.contests import (
     get_team_contest_dao,
 )
 from app.api.teams.services.teams import TeamService, get_team_service
+from app.core.enums import ContestStatus
 from app.core.exceptions.contests import (
     ContestAlreadyRegisteredException,
-    ContestNotActiveException,
     ContestNotFoundException,
+    InvalidContestStateTransition,
+    RegistrationClosedException,
 )
 from app.core.exceptions.teams import NotTeamCreatorException
 from app.database.models.contests import Contest, TeamContest
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Valid one-step transitions for the contest lifecycle state machine
+# ---------------------------------------------------------------------------
+_VALID_TRANSITIONS: dict[ContestStatus, ContestStatus] = {
+    ContestStatus.DRAFT: ContestStatus.REGISTRATION_OPEN,
+    ContestStatus.REGISTRATION_OPEN: ContestStatus.ACTIVE,
+    ContestStatus.ACTIVE: ContestStatus.ENDED,
+}
+
+
+def ensure_contest_status(
+    contest: Contest, allowed_statuses: list[ContestStatus]
+) -> None:
+    """Raise RegistrationClosedException if contest.status is not in allowed_statuses.
+
+    Reusable helper — call this before any operation that requires the contest
+    to be in a specific lifecycle stage.
+    """
+    if contest.status not in allowed_statuses:
+        raise RegistrationClosedException(contest_id=contest.id)
 
 
 class ContestService:
@@ -41,26 +64,29 @@ class ContestService:
         name: str,
         start_time: datetime,
         end_time: datetime,
+        created_by: str,
         description: str | None = None,
     ) -> Contest:
         """
-        Create a new contest.
+        Create a new contest. Starts in DRAFT status.
 
         Args:
             name: Contest name.
             start_time: Contest start datetime.
             end_time: Contest end datetime.
+            created_by: User ID of the creator (used for admin checks).
             description: Optional description.
 
         Returns:
             Created Contest instance.
         """
-        logger.info(f"Creating contest '{name}'")
+        logger.info(f"Creating contest '{name}' by user {created_by}")
         contest = await self._contest_dao.create(
             name=name,
             description=description,
             start_time=start_time,
             end_time=end_time,
+            created_by=created_by,
         )
         logger.info(f"Contest '{name}' created with id {contest.id}")
         return contest
@@ -82,8 +108,59 @@ class ContestService:
         return await self._contest_dao.get_all()
 
     async def list_active_contests(self) -> list[Contest]:
-        """Return only active contests."""
+        """Return only contests with ACTIVE status."""
         return await self._contest_dao.get_active()
+
+    # ------------------------------------------------------------------
+    # Lifecycle State Machine
+    # ------------------------------------------------------------------
+
+    async def update_contest_status(
+        self,
+        contest_id: str,
+        new_status: ContestStatus,
+        requesting_user_id: str,
+    ) -> Contest:
+        """
+        Transition a contest to a new lifecycle status.
+
+        Valid transitions:
+            DRAFT → REGISTRATION_OPEN
+            REGISTRATION_OPEN → ACTIVE
+            ACTIVE → ENDED
+
+        Only the contest creator (admin) may call this.
+
+        Raises:
+            ContestNotFoundException: If contest does not exist.
+            NotTeamCreatorException: If requester is not the contest creator.
+            InvalidContestStateTransition: If the transition is not allowed.
+        """
+        contest = await self.get_contest(contest_id)
+
+        # Admin check — only the contest creator may drive the lifecycle
+        if contest.created_by != requesting_user_id:
+            raise NotTeamCreatorException(
+                message="Only the contest creator can change the contest status"
+            )
+
+        # Validate the transition
+        expected_next = _VALID_TRANSITIONS.get(contest.status)
+        if expected_next != new_status:
+            raise InvalidContestStateTransition(
+                from_status=contest.status.value,
+                to_status=new_status.value,
+            )
+
+        updated = await self._contest_dao.update_status(contest, new_status)
+        logger.info(
+            f"Contest {contest_id} transitioned: {contest.status.value} → {new_status.value}"
+        )
+        return updated
+
+    # ------------------------------------------------------------------
+    # Registration
+    # ------------------------------------------------------------------
 
     async def register_team(
         self,
@@ -96,20 +173,32 @@ class ContestService:
 
         Raises:
             ContestNotFoundException: If contest does not exist.
-            ContestNotActiveException: If contest is not active.
+            RegistrationClosedException: If contest status ≠ REGISTRATION_OPEN.
             NotTeamCreatorException: If requester is not the team creator.
             ContestAlreadyRegisteredException: If team is already registered.
         """
         contest = await self.get_contest(contest_id)
 
-        if not contest.is_active:
-            raise ContestNotActiveException(contest_id=contest_id)
+        # Enforce lifecycle — only allowed during REGISTRATION_OPEN
+        ensure_contest_status(contest, [ContestStatus.REGISTRATION_OPEN])
 
         # Validate team exists and requesting user is its creator
         team = await self._team_service.get_team(team_id=team_id)
         if team.created_by != requesting_user_id:
             raise NotTeamCreatorException(
                 message="Only the team creator can register the team for a contest"
+            )
+
+        # Validate team readiness (2 members, both roles filled)
+        team_status = await self._team_service.get_team_status(team_id=team_id)
+        if not team_status.is_ready:
+            from app.core.exceptions.common import BadRequestException
+
+            raise BadRequestException(
+                message=(
+                    f"Team is not contest-ready. "
+                    f"Missing roles: {', '.join(team_status.missing_roles)}"
+                )
             )
 
         existing = await self._team_contest_dao.get(
@@ -126,11 +215,14 @@ class ContestService:
         logger.info(f"Team {team_id} registered for contest {contest_id}")
         return registration
 
+    # ------------------------------------------------------------------
+    # Queries
+    # ------------------------------------------------------------------
+
     async def get_my_contests(self, user_id: str) -> list[Contest]:
         """
         Get all contests that any of the user's teams are participating in.
         """
-        # Get team_ids the user belongs to
         team_ids = await self._team_service.get_my_teams(user_id)
         contest_ids: set[str] = set()
 
@@ -154,8 +246,7 @@ class ContestService:
         Raises:
             ContestNotFoundException: If contest does not exist.
             TeamNotFoundException: If team does not exist.
-            ContestAlreadyRegisteredException: Reused as NotFoundException here
-                — raises if the team is not registered.
+            ContestNotFoundException: If the team is not registered.
         """
         await self.get_contest(contest_id)  # validates contest exists
         await self._team_service.get_team(team_id)  # validates team exists

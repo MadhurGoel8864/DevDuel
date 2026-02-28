@@ -5,6 +5,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from app.core.enums import ContestStatus
 from app.core.responses import APIResponse
 from app.core.timezone_utils import ISTDatetimeMixin
 
@@ -53,7 +54,8 @@ class ContestResponseData(BaseSchema, ISTDatetimeMixin):
     description: Optional[str] = None
     start_time: datetime
     end_time: datetime
-    is_active: bool
+    status: ContestStatus
+    created_by: str
     teams: list[TeamContestResponseData] = []
     created_at: datetime
     updated_at: datetime
@@ -67,7 +69,8 @@ class ContestSummaryData(BaseSchema, ISTDatetimeMixin):
     description: Optional[str] = None
     start_time: datetime
     end_time: datetime
-    is_active: bool
+    status: ContestStatus
+    created_by: str
     created_at: datetime
 
 

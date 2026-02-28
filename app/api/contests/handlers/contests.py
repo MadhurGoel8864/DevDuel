@@ -19,6 +19,7 @@ from app.api.contests.schemas.contests import (
     TeamContestDetailResponse,
 )
 from app.api.contests.services.contests import ContestService, get_contest_service
+from app.core.enums import ContestStatus
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +29,13 @@ async def create_contest_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     contest_service: ContestService = Depends(get_contest_service),
 ) -> ContestResponse:
-    """Create a new contest."""
+    """Create a new contest. Starts in DRAFT status."""
     contest = await contest_service.create_contest(
         name=request.data.name,
         description=request.data.description,
         start_time=request.data.start_time,
         end_time=request.data.end_time,
+        created_by=current_user.user_id,
     )
     logger.info(f"Contest '{contest.name}' created by user {current_user.user_id}")
     return ContestResponse(data=ContestResponseData.model_validate(contest))
@@ -54,7 +56,7 @@ async def list_active_contests_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     contest_service: ContestService = Depends(get_contest_service),
 ) -> ContestListResponse:
-    """List all active contests."""
+    """List all ACTIVE contests."""
     contests = await contest_service.list_active_contests()
     return ContestListResponse(
         data=[ContestSummaryData.model_validate(c) for c in contests]
@@ -77,7 +79,9 @@ async def register_team_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     contest_service: ContestService = Depends(get_contest_service),
 ) -> ContestResponse:
-    """Register a team for a contest. Only the team creator can register."""
+    """Register a team for a contest. Only the team creator can register.
+    Contest must be in REGISTRATION_OPEN status.
+    """
     await contest_service.register_team(
         contest_id=contest_id,
         team_id=request.data.team_id,
@@ -136,3 +140,54 @@ async def get_contest_leaderboard_handler(
             for rank, tc in ranked
         ]
     )
+
+
+# ── Admin Lifecycle Endpoints ──────────────────────────────────────────────────
+
+
+async def open_registration_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    contest_service: ContestService = Depends(get_contest_service),
+) -> ContestResponse:
+    """Open registration for a contest (DRAFT → REGISTRATION_OPEN).
+    Only the contest creator may call this.
+    """
+    contest = await contest_service.update_contest_status(
+        contest_id=contest_id,
+        new_status=ContestStatus.REGISTRATION_OPEN,
+        requesting_user_id=current_user.user_id,
+    )
+    return ContestResponse(data=ContestResponseData.model_validate(contest))
+
+
+async def start_contest_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    contest_service: ContestService = Depends(get_contest_service),
+) -> ContestResponse:
+    """Start a contest (REGISTRATION_OPEN → ACTIVE).
+    Only the contest creator may call this.
+    """
+    contest = await contest_service.update_contest_status(
+        contest_id=contest_id,
+        new_status=ContestStatus.ACTIVE,
+        requesting_user_id=current_user.user_id,
+    )
+    return ContestResponse(data=ContestResponseData.model_validate(contest))
+
+
+async def end_contest_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    contest_service: ContestService = Depends(get_contest_service),
+) -> ContestResponse:
+    """End a contest (ACTIVE → ENDED).
+    Only the contest creator may call this.
+    """
+    contest = await contest_service.update_contest_status(
+        contest_id=contest_id,
+        new_status=ContestStatus.ENDED,
+        requesting_user_id=current_user.user_id,
+    )
+    return ContestResponse(data=ContestResponseData.model_validate(contest))

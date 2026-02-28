@@ -1,6 +1,6 @@
 from sqlalchemy import (
-    Boolean,
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -9,6 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import mapped_column, relationship
 
+from app.core.enums import ContestStatus
 from app.database.models.base import Base
 from app.database.models.mixins import TimestampMixin
 from app.database.utils import generate_uuid
@@ -24,7 +25,17 @@ class Contest(Base, TimestampMixin):
     start_time = mapped_column(DateTime(timezone=True), nullable=False)
     end_time = mapped_column(DateTime(timezone=True), nullable=False)
 
-    is_active = mapped_column(Boolean, default=True, nullable=False)
+    created_by = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    status = mapped_column(
+        Enum(ContestStatus, name="conteststatus"),
+        default=ContestStatus.DRAFT,
+        nullable=False,
+    )
 
     teams = relationship(
         "TeamContest",
