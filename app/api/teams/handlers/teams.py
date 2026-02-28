@@ -191,7 +191,7 @@ async def can_join_contest_handler(
 
     can_join, reasons = await team_service.can_join_contest(
         team_id=team_id,
-        contest_is_active=contest.is_active,
+        contest_status=contest.status,
         already_registered=existing is not None,
     )
     return CanJoinResponse(

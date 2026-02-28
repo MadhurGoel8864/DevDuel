@@ -9,10 +9,12 @@ from app.core.exceptions.base import AppException
 from app.core.exceptions.common import BadRequestException
 from app.core.exceptions.contests import (
     ContestAlreadyRegisteredException,
-    ContestNotActiveException,
     ContestNotFoundException,
+    InvalidContestStateTransition,
+    RegistrationClosedException,
 )
 from app.core.exceptions.teams import (
+    CannotModifyTeamDuringActiveContest,
     NotTeamCreatorException,
     TeamAlreadyExistsException,
     TeamMemberAlreadyExistsException,
@@ -44,8 +46,11 @@ __all__ = [
     "TeamMemberAlreadyExistsException",
     "TeamRoleTakenException",
     "NotTeamCreatorException",
+    "CannotModifyTeamDuringActiveContest",
     # Contest exceptions
     "ContestNotFoundException",
     "ContestAlreadyRegisteredException",
-    "ContestNotActiveException",
+    "RegistrationClosedException",
+    "InvalidContestStateTransition",
+    "BadRequestException",
 ]

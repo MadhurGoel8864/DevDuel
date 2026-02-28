@@ -23,3 +23,12 @@ class PlatformType(str, Enum):
 class TeamRole(str, Enum):
     BIDDING = "BIDDING"
     CODING = "CODING"
+
+
+class ContestStatus(str, Enum):
+    """Lifecycle status for a Contest."""
+
+    DRAFT = "DRAFT"
+    REGISTRATION_OPEN = "REGISTRATION_OPEN"
+    ACTIVE = "ACTIVE"
+    ENDED = "ENDED"

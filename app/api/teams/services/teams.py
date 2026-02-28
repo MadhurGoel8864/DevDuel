@@ -6,14 +6,16 @@ from typing import Optional
 
 from fastapi import Depends
 
+from app.api.contests.dao.contests import TeamContestDAO, get_team_contest_dao
 from app.api.teams.dao.teams import (
     TeamDAO,
     TeamMemberDAO,
     get_team_dao,
     get_team_member_dao,
 )
-from app.core.enums import TeamRole
+from app.core.enums import ContestStatus, TeamRole
 from app.core.exceptions.teams import (
+    CannotModifyTeamDuringActiveContest,
     NotTeamCreatorException,
     TeamAlreadyExistsException,
     TeamMemberAlreadyExistsException,
@@ -56,9 +58,35 @@ class TeamStatus:
 class TeamService:
     """Business logic for Team operations."""
 
-    def __init__(self, team_dao: TeamDAO, member_dao: TeamMemberDAO):
+    def __init__(
+        self,
+        team_dao: TeamDAO,
+        member_dao: TeamMemberDAO,
+        team_contest_dao: TeamContestDAO,
+    ):
         self._team_dao = team_dao
         self._member_dao = member_dao
+        self._team_contest_dao = team_contest_dao
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    async def _ensure_not_in_active_contest(self, team_id: str) -> None:
+        """Raise CannotModifyTeamDuringActiveContest if the team is in any ACTIVE contest."""
+        active_entries = await self._team_contest_dao.get_active_contests_for_team(
+            team_id
+        )
+        if active_entries:
+            # Surface the first active contest id for context
+            raise CannotModifyTeamDuringActiveContest(
+                team_id=team_id,
+                contest_id=active_entries[0].contest_id,
+            )
+
+    # ------------------------------------------------------------------
+    # CRUD
+    # ------------------------------------------------------------------
 
     async def create_team(self, name: str, creator_user_id: str) -> Team:
         """
@@ -131,6 +159,7 @@ class TeamService:
         Raises:
             TeamNotFoundException: If team does not exist.
             NotTeamCreatorException: If requester is not the team creator.
+            CannotModifyTeamDuringActiveContest: If team is in an ACTIVE contest.
             TeamMemberAlreadyExistsException: If user is already a member.
             TeamRoleTakenException: If the role slot is already filled.
         """
@@ -138,6 +167,9 @@ class TeamService:
 
         if team.created_by != requesting_user_id:
             raise NotTeamCreatorException()
+
+        # Guard: cannot modify roster during an active contest
+        await self._ensure_not_in_active_contest(team_id)
 
         existing_member = await self._member_dao.get(team_id=team_id, user_id=user_id)
         if existing_member:
@@ -163,7 +195,7 @@ class TeamService:
         Raises:
             TeamNotFoundException: If team does not exist.
             NotTeamCreatorException: If requester is not the team creator.
-            NotTeamCreatorException: If creator tries to remove themselves.
+            CannotModifyTeamDuringActiveContest: If team is in an ACTIVE contest.
             TeamMemberNotFoundException: If the target user is not a member.
         """
         team = await self.get_team(team_id)
@@ -175,6 +207,9 @@ class TeamService:
             raise NotTeamCreatorException(
                 message="Team creator cannot remove themselves from the team"
             )
+
+        # Guard: cannot modify roster during an active contest
+        await self._ensure_not_in_active_contest(team_id)
 
         member = await self._member_dao.get(team_id=team_id, user_id=user_id)
         if not member:
@@ -241,11 +276,15 @@ class TeamService:
         Raises:
             TeamNotFoundException: If team does not exist.
             NotTeamCreatorException: If requester is not the team creator.
+            CannotModifyTeamDuringActiveContest: If team is in an ACTIVE contest.
         """
         team = await self.get_team(team_id)
 
         if team.created_by != requesting_user_id:
             raise NotTeamCreatorException()
+
+        # Guard: cannot delete a team that is in an active contest
+        await self._ensure_not_in_active_contest(team_id)
 
         await self._team_dao.delete(team)
         logger.info(f"Deleted team {team_id}")
@@ -289,7 +328,7 @@ class TeamService:
     async def can_join_contest(
         self,
         team_id: str,
-        contest_is_active: bool,
+        contest_status: ContestStatus,
         already_registered: bool,
     ) -> tuple[bool, list[str]]:
         """
@@ -299,7 +338,7 @@ class TeamService:
 
         Args:
             team_id: Team to check.
-            contest_is_active: Whether the target contest is active.
+            contest_status: Current lifecycle status of the target contest.
             already_registered: Whether the team is already in the contest.
 
         Returns:
@@ -316,8 +355,10 @@ class TeamService:
         if not status.is_ready:
             reasons.append(f"Team is missing roles: {', '.join(status.missing_roles)}")
 
-        if not contest_is_active:
-            reasons.append("Contest is not active")
+        if contest_status != ContestStatus.REGISTRATION_OPEN:
+            reasons.append(
+                f"Contest registration is not open (status: {contest_status.value})"
+            )
 
         if already_registered:
             reasons.append("Team is already registered for this contest")
@@ -331,5 +372,10 @@ class TeamService:
 async def get_team_service(
     team_dao: TeamDAO = Depends(get_team_dao),
     member_dao: TeamMemberDAO = Depends(get_team_member_dao),
+    team_contest_dao: TeamContestDAO = Depends(get_team_contest_dao),
 ) -> TeamService:
-    return TeamService(team_dao=team_dao, member_dao=member_dao)
+    return TeamService(
+        team_dao=team_dao,
+        member_dao=member_dao,
+        team_contest_dao=team_contest_dao,
+    )
