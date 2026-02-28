@@ -89,3 +89,20 @@ class NotTeamCreatorException(AppException):
             message=message or "Only the team creator can perform this action",
             status_code=403,
         )
+
+
+class TeamMemberSameRoleException(AppException):
+    """Raised when both members already share the same role — nothing to swap. HTTP 400."""
+
+    def __init__(self, role: Optional[str] = None):
+        details = {"role": role} if role else None
+        super().__init__(
+            code="TEAM_MEMBER_SAME_ROLE",
+            message=(
+                f"Both members are already in the '{role}' group — no swap needed"
+                if role
+                else "Both members already have the same role"
+            ),
+            status_code=400,
+            details=details,
+        )
