@@ -5,7 +5,9 @@ from fastapi import APIRouter
 from app.api.contests.handlers.contests import (
     create_contest_handler,
     get_contest_handler,
+    get_contest_leaderboard_handler,
     get_my_contests_handler,
+    get_team_in_contest_handler,
     list_active_contests_handler,
     list_contests_handler,
     register_team_handler,
@@ -21,4 +23,11 @@ router.add_api_route("/me", get_my_contests_handler, methods=["GET"])
 router.add_api_route("/{contest_id}", get_contest_handler, methods=["GET"])
 router.add_api_route(
     "/{contest_id}/register", register_team_handler, methods=["POST"], status_code=201
+)
+# Leaderboard and team-in-contest
+router.add_api_route(
+    "/{contest_id}/teams", get_contest_leaderboard_handler, methods=["GET"]
+)
+router.add_api_route(
+    "/{contest_id}/teams/{team_id}", get_team_in_contest_handler, methods=["GET"]
 )

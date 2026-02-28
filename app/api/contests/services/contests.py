@@ -146,6 +146,58 @@ class ContestService:
                 contests.append(contest)
         return contests
 
+    async def get_team_in_contest(self, contest_id: str, team_id: str) -> TeamContest:
+        """
+        Return the TeamContest state for a specific team in a specific contest.
+        Used for the team dashboard view (currency, score, registration info).
+
+        Raises:
+            ContestNotFoundException: If contest does not exist.
+            TeamNotFoundException: If team does not exist.
+            ContestAlreadyRegisteredException: Reused as NotFoundException here
+                — raises if the team is not registered.
+        """
+        await self.get_contest(contest_id)  # validates contest exists
+        await self._team_service.get_team(team_id)  # validates team exists
+
+        registration = await self._team_contest_dao.get(
+            team_id=team_id, contest_id=contest_id
+        )
+        if not registration:
+            raise ContestNotFoundException(
+                message=f"Team '{team_id}' is not registered for contest '{contest_id}'"
+            )
+        return registration
+
+    async def get_contest_leaderboard(
+        self, contest_id: str
+    ) -> list[tuple[int, TeamContest]]:
+        """
+        Return all registered teams for a contest ranked by score desc,
+        then currency desc as a tiebreaker.
+
+        Returns:
+            List of (rank, TeamContest) tuples, 1-indexed.
+        """
+        await self.get_contest(contest_id)  # validates existence
+
+        registrations = await self._team_contest_dao.get_by_contest(contest_id)
+        sorted_teams = sorted(
+            registrations,
+            key=lambda r: (r.score, r.currency),
+            reverse=True,
+        )
+        return [(i + 1, tc) for i, tc in enumerate(sorted_teams)]
+
+    async def get_team_in_contest_safe(
+        self, contest_id: str, team_id: str
+    ) -> TeamContest | None:
+        """
+        Non-raising version of get_team_in_contest.
+        Returns None if the team is not registered — used for pre-checks like can-join.
+        """
+        return await self._team_contest_dao.get(team_id=team_id, contest_id=contest_id)
+
 
 # ── Dependency ─────────────────────────────────────────────────────────────────
 

@@ -71,7 +71,32 @@ class ContestSummaryData(BaseSchema, ISTDatetimeMixin):
     created_at: datetime
 
 
+# ── Leaderboard / Team-in-Contest Schemas ────────────────────────────────────
+
+
+class TeamContestDetailData(BaseSchema, ISTDatetimeMixin):
+    """Full TeamContest state for a single team — used by the dashboard endpoint."""
+
+    id: str
+    team_id: str
+    contest_id: str
+    currency: int
+    score: int
+    created_at: datetime
+
+
+class LeaderboardEntryData(BaseSchema):
+    """One row on the leaderboard — ordered by score desc, then currency desc."""
+
+    rank: int
+    team_id: str
+    score: int
+    currency: int
+
+
 # ── Final Response Aliases ─────────────────────────────────────────────────────
 
 ContestResponse = APIResponse[ContestResponseData]
 ContestListResponse = APIResponse[list[ContestSummaryData]]
+TeamContestDetailResponse = APIResponse[TeamContestDetailData]
+LeaderboardResponse = APIResponse[list[LeaderboardEntryData]]

@@ -12,7 +12,11 @@ from app.api.contests.schemas.contests import (
     ContestResponse,
     ContestResponseData,
     ContestSummaryData,
+    LeaderboardEntryData,
+    LeaderboardResponse,
     RegisterTeamRequest,
+    TeamContestDetailData,
+    TeamContestDetailResponse,
 )
 from app.api.contests.services.contests import ContestService, get_contest_service
 
@@ -91,4 +95,44 @@ async def get_my_contests_handler(
     contests = await contest_service.get_my_contests(user_id=current_user.user_id)
     return ContestListResponse(
         data=[ContestSummaryData.model_validate(c) for c in contests]
+    )
+
+
+async def get_team_in_contest_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    team_id: str = Path(..., description="Team ID"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    contest_service: ContestService = Depends(get_contest_service),
+) -> TeamContestDetailResponse:
+    """
+    Return the TeamContest state (currency, score) for a specific team in a contest.
+    Used by the team dashboard.
+    """
+    registration = await contest_service.get_team_in_contest(
+        contest_id=contest_id, team_id=team_id
+    )
+    return TeamContestDetailResponse(
+        data=TeamContestDetailData.model_validate(registration)
+    )
+
+
+async def get_contest_leaderboard_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    contest_service: ContestService = Depends(get_contest_service),
+) -> LeaderboardResponse:
+    """
+    Return all teams in a contest ranked by score desc, then currency desc.
+    """
+    ranked = await contest_service.get_contest_leaderboard(contest_id=contest_id)
+    return LeaderboardResponse(
+        data=[
+            LeaderboardEntryData(
+                rank=rank,
+                team_id=tc.team_id,
+                score=tc.score,
+                currency=tc.currency,
+            )
+            for rank, tc in ranked
+        ]
     )

@@ -1,6 +1,8 @@
 """Team Service Layer"""
 
 import logging
+from dataclasses import dataclass
+from typing import Optional
 
 from fastapi import Depends
 
@@ -23,6 +25,32 @@ from app.core.exceptions.teams import (
 from app.database.models.teams import Team, TeamMember
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TeamStatus:
+    """
+    Represents the readiness state of a team for contest participation.
+    This is the single source of truth — reused by can_join_contest.
+    """
+
+    has_bidder: bool
+    has_coder: bool
+    member_count: int
+
+    @property
+    def is_ready(self) -> bool:
+        """Team is contest-ready when both roles are filled."""
+        return self.has_bidder and self.has_coder
+
+    @property
+    def missing_roles(self) -> list[str]:
+        missing = []
+        if not self.has_bidder:
+            missing.append(TeamRole.BIDDING.value)
+        if not self.has_coder:
+            missing.append(TeamRole.CODING.value)
+        return missing
 
 
 class TeamService:
@@ -221,6 +249,80 @@ class TeamService:
 
         await self._team_dao.delete(team)
         logger.info(f"Deleted team {team_id}")
+
+    async def get_team_status(self, team_id: str) -> TeamStatus:
+        """
+        Determine whether the team is contest-ready.
+
+        A team is ready when it has exactly one BIDDING and one CODING member.
+        This is the authoritative readiness check — other methods must call this
+        rather than reimplement the logic.
+
+        Raises:
+            TeamNotFoundException: If team does not exist.
+        """
+        await self.get_team(team_id)  # validates existence
+
+        has_bidder = await self._member_dao.count_by_role(team_id, TeamRole.BIDDING) > 0
+        has_coder = await self._member_dao.count_by_role(team_id, TeamRole.CODING) > 0
+        members = await self._member_dao.get_by_team(team_id)
+
+        return TeamStatus(
+            has_bidder=has_bidder,
+            has_coder=has_coder,
+            member_count=len(members),
+        )
+
+    async def get_user_role_in_team(
+        self, team_id: str, user_id: str
+    ) -> Optional[TeamRole]:
+        """
+        Return the role of a user in a team, or None if not a member.
+
+        Raises:
+            TeamNotFoundException: If team does not exist.
+        """
+        await self.get_team(team_id)  # validates existence
+        member = await self._member_dao.get(team_id=team_id, user_id=user_id)
+        return member.role if member else None
+
+    async def can_join_contest(
+        self,
+        team_id: str,
+        contest_is_active: bool,
+        already_registered: bool,
+    ) -> tuple[bool, list[str]]:
+        """
+        Pre-check whether a team can join a contest.
+
+        Reuses get_team_status() — no readiness logic is reimplemented here.
+
+        Args:
+            team_id: Team to check.
+            contest_is_active: Whether the target contest is active.
+            already_registered: Whether the team is already in the contest.
+
+        Returns:
+            Tuple of (can_join: bool, reasons: list[str]).
+            `reasons` is empty when can_join is True.
+
+        Raises:
+            TeamNotFoundException: If team does not exist.
+        """
+        reasons: list[str] = []
+
+        # Reuse the single source of truth for team readiness
+        status = await self.get_team_status(team_id)
+        if not status.is_ready:
+            reasons.append(f"Team is missing roles: {', '.join(status.missing_roles)}")
+
+        if not contest_is_active:
+            reasons.append("Contest is not active")
+
+        if already_registered:
+            reasons.append("Team is already registered for this contest")
+
+        return (len(reasons) == 0, reasons)
 
 
 # ── Dependency ─────────────────────────────────────────────────────────────────

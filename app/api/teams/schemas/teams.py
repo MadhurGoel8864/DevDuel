@@ -71,7 +71,35 @@ class TeamSummaryData(BaseSchema, ISTDatetimeMixin):
     created_at: datetime
 
 
+# ── Status / Role / Can-Join Schemas ──────────────────────────────────────────
+
+
+class TeamStatusResponseData(BaseSchema):
+    is_ready: bool
+    has_bidder: bool
+    has_coder: bool
+    member_count: int
+    missing_roles: list[str]
+
+
+class TeamRoleResponseData(BaseSchema):
+    team_id: str
+    user_id: str
+    role: TeamRole | None
+    is_member: bool
+
+
+class CanJoinResponseData(BaseSchema):
+    team_id: str
+    contest_id: str
+    can_join: bool
+    reasons: list[str]
+
+
 # ── Final Response Aliases ─────────────────────────────────────────────────────
 
 TeamResponse = APIResponse[TeamResponseData]
 TeamListResponse = APIResponse[list[TeamSummaryData]]
+TeamStatusResponse = APIResponse[TeamStatusResponseData]
+TeamRoleResponse = APIResponse[TeamRoleResponseData]
+CanJoinResponse = APIResponse[CanJoinResponseData]
