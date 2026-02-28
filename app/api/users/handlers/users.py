@@ -25,7 +25,7 @@ async def create_user_handler(
 ) -> UserCreateResponse:
     """
     Handle user creation request.
-    For carpooling: Creates a new user (rider, driver, or admin) and sends verification OTP.
+    Creates a new DevDuel user and sends a verification OTP to their email.
     """
     # Service layer handles user creation, OTP generation, storage, and email sending
     user = await user_service.create_user(request.data, background_tasks)
@@ -40,7 +40,7 @@ async def get_user_handler(
 ) -> UserGetResponse:
     """
     Handle get user request.
-    For carpooling: Retrieves user profile information.
+    Retrieves profile information for a DevDuel user.
     """
     user = await user_service.get_user_by_id(user_id)
     return UserGetResponse(data=UserGetResponseData.model_validate(user))
@@ -52,7 +52,7 @@ async def get_users_handler(
 ) -> UserListResponse:
     """
     Handle get users list request.
-    For carpooling: Retrieves all registered users.
+    Retrieves all registered DevDuel users.
     """
     users = await user_service.get_all_users()
     return UserListResponse(
