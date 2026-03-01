@@ -20,9 +20,9 @@ from app.core.exceptions.teams import (
     TeamAlreadyExistsException,
     TeamMemberAlreadyExistsException,
     TeamMemberNotFoundException,
+    TeamMemberSameRoleException,
     TeamNotFoundException,
     TeamRoleTakenException,
-    TeamMemberSameRoleException,
 )
 from app.database.models.teams import Team, TeamMember
 
@@ -240,6 +240,7 @@ class TeamService:
         Raises:
             TeamNotFoundException: If team does not exist.
             NotTeamCreatorException: If requester is not the team creator.
+            CannotModifyTeamDuringActiveContest: If team is in an ACTIVE contest.
             TeamMemberNotFoundException: If either member ID is not found in this team.
             TeamMemberSameRoleException: If both members already have the same role.
         """
@@ -247,6 +248,9 @@ class TeamService:
 
         if team.created_by != requesting_user_id:
             raise NotTeamCreatorException()
+
+        # Guard: cannot swap roles during an active contest
+        await self._ensure_not_in_active_contest(team_id)
 
         # Fetch both members by their TeamMember.id and verify they belong to this team
         member1 = await self._member_dao.get_by_id(member1_id)
@@ -257,7 +261,7 @@ class TeamService:
         if not member2 or member2.team_id != team_id:
             raise TeamMemberNotFoundException(user_id=member2_id, team_id=team_id)
 
-        # No-op guard — roles are already different, nothing to swap
+        # No-op guard — roles must be different to swap
         if member1.role == member2.role:
             raise TeamMemberSameRoleException(role=member1.role.value)
 

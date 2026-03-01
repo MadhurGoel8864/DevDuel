@@ -34,7 +34,7 @@ class AddMemberRequest(BaseSchema):
 
 
 class SwapRolesData(BaseSchema):
-    member1_id: str  
+    member1_id: str
     member2_id: str  # TeamMember.id (not User.id)
 
 

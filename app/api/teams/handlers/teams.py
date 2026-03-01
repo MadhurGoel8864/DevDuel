@@ -9,9 +9,9 @@ from app.api.auth.schemas import UserWithPermissions
 from app.api.contests.services.contests import ContestService, get_contest_service
 from app.api.teams.schemas.teams import (
     AddMemberRequest,
-    SwapRolesRequest,
     CanJoinResponse,
     CanJoinResponseData,
+    SwapRolesRequest,
     TeamCreateRequest,
     TeamListResponse,
     TeamResponse,
@@ -100,7 +100,7 @@ async def swap_roles_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     team_service: TeamService = Depends(get_team_service),
 ) -> TeamResponse:
-    """ Swap roles between two team members. Only the team creator can perform this action.
+    """Swap roles between two team members. Only the team creator can perform this action.
     member1_id and member2_id must be TeamMember IDs (not User IDs) and must belong
     to this team. Both members must currently have different roles.
     """
@@ -127,7 +127,6 @@ async def delete_team_handler(
     )
     logger.info(f"Team {team_id} deleted by user {current_user.user_id}")
     return TeamResponse(data=response_data)
-    
 
 
 async def get_team_status_handler(

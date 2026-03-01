@@ -133,13 +133,18 @@ class TeamMemberDAO:
             logger.error(f"Failed to count members by role: {e}")
             raise e
 
-    async def swap_roles(self, member1: TeamMember, member2: TeamMember) -> tuple[TeamMember, TeamMember]:
+    async def swap_roles(
+        self, member1: TeamMember, member2: TeamMember
+    ) -> tuple[TeamMember, TeamMember]:
         """
         Atomically swap the roles of two TeamMember records.
         Rolls back both changes if anything fails.
         """
         try:
-            member1.role, member2.role = member2.role, member1.role # Swap roles in memory
+            member1.role, member2.role = (
+                member2.role,
+                member1.role,
+            )  # Swap roles in memory
             self._session.add(member1)
             self._session.add(member2)
             await self._session.commit()
@@ -148,7 +153,9 @@ class TeamMemberDAO:
             return member1, member2
         except Exception as e:
             await self._session.rollback()
-            logger.error(f"Failed to swap roles between {member1.id} and {member2.id}: {e}")
+            logger.error(
+                f"Failed to swap roles between {member1.id} and {member2.id}: {e}"
+            )
             raise e
 
     async def remove(self, member: TeamMember) -> None:
