@@ -89,6 +89,16 @@ class TeamMemberDAO:
             logger.error(f"Failed to get team member: {e}")
             raise e
 
+    async def get_by_id(self, member_id: str) -> Optional[TeamMember]:
+        try:
+            result = await self._session.execute(
+                select(TeamMember).where(TeamMember.id == member_id)
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Failed to get team member by id {member_id}: {e}")
+            raise e
+
     async def get_by_team(self, team_id: str) -> list[TeamMember]:
         try:
             result = await self._session.execute(
@@ -121,6 +131,31 @@ class TeamMemberDAO:
             return len(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to count members by role: {e}")
+            raise e
+
+    async def swap_roles(
+        self, member1: TeamMember, member2: TeamMember
+    ) -> tuple[TeamMember, TeamMember]:
+        """
+        Atomically swap the roles of two TeamMember records.
+        Rolls back both changes if anything fails.
+        """
+        try:
+            member1.role, member2.role = (
+                member2.role,
+                member1.role,
+            )  # Swap roles in memory
+            self._session.add(member1)
+            self._session.add(member2)
+            await self._session.commit()
+            await self._session.refresh(member1)
+            await self._session.refresh(member2)
+            return member1, member2
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(
+                f"Failed to swap roles between {member1.id} and {member2.id}: {e}"
+            )
             raise e
 
     async def remove(self, member: TeamMember) -> None:

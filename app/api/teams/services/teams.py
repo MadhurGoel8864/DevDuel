@@ -20,6 +20,7 @@ from app.core.exceptions.teams import (
     TeamAlreadyExistsException,
     TeamMemberAlreadyExistsException,
     TeamMemberNotFoundException,
+    TeamMemberSameRoleException,
     TeamNotFoundException,
     TeamRoleTakenException,
 )
@@ -216,6 +217,61 @@ class TeamService:
 
         await self._member_dao.remove(member)
         logger.info(f"Removed user {user_id} from team {team_id}")
+
+    async def swap_member_roles(
+        self,
+        team_id: str,
+        member1_id: str,
+        member2_id: str,
+        requesting_user_id: str,
+    ) -> Team:
+        """
+        Swap the roles of two members within a team (creator only).
+
+        Args:
+            team_id: The team both members belong to.
+            member1_id: TeamMember.id of the first member.
+            member2_id: TeamMember.id of the second member.
+            requesting_user_id: Must be the team creator.
+
+        Returns:
+            Updated Team instance with refreshed members.
+
+        Raises:
+            TeamNotFoundException: If team does not exist.
+            NotTeamCreatorException: If requester is not the team creator.
+            CannotModifyTeamDuringActiveContest: If team is in an ACTIVE contest.
+            TeamMemberNotFoundException: If either member ID is not found in this team.
+            TeamMemberSameRoleException: If both members already have the same role.
+        """
+        team = await self.get_team(team_id)
+
+        if team.created_by != requesting_user_id:
+            raise NotTeamCreatorException()
+
+        # Guard: cannot swap roles during an active contest
+        await self._ensure_not_in_active_contest(team_id)
+
+        # Fetch both members by their TeamMember.id and verify they belong to this team
+        member1 = await self._member_dao.get_by_id(member1_id)
+        if not member1 or member1.team_id != team_id:
+            raise TeamMemberNotFoundException(user_id=member1_id, team_id=team_id)
+
+        member2 = await self._member_dao.get_by_id(member2_id)
+        if not member2 or member2.team_id != team_id:
+            raise TeamMemberNotFoundException(user_id=member2_id, team_id=team_id)
+
+        # No-op guard — roles must be different to swap
+        if member1.role == member2.role:
+            raise TeamMemberSameRoleException(role=member1.role.value)
+
+        await self._member_dao.swap_roles(member1, member2)
+        logger.info(
+            f"Swapped roles between members {member1_id} and {member2_id} in team {team_id}"
+        )
+
+        refreshed = await self._team_dao.get_by_id(team_id)
+        return refreshed  # type: ignore[return-value]
 
     async def delete_team(self, team_id: str, requesting_user_id: str) -> None:
         """

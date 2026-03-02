@@ -12,6 +12,7 @@ from app.api.teams.handlers.teams import (
     get_team_handler,
     get_team_status_handler,
     remove_member_handler,
+    swap_roles_handler,
 )
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
@@ -24,6 +25,9 @@ router.add_api_route(
 )
 router.add_api_route(
     "/{team_id}/members/{user_id}", remove_member_handler, methods=["DELETE"]
+)
+router.add_api_route(
+    "/{team_id}/members/swap-roles", swap_roles_handler, methods=["POST"]
 )
 router.add_api_route("/{team_id}", delete_team_handler, methods=["DELETE"])
 # Status / role / pre-check routes

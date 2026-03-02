@@ -91,6 +91,21 @@ class NotTeamCreatorException(AppException):
         )
 
 
+class TeamMemberSameRoleException(AppException):
+    """Raised when both members already share the same role — nothing to swap. HTTP 400."""
+
+    def __init__(self, role: Optional[str] = None):
+        details = {"role": role} if role else None
+        super().__init__(
+            code="TEAM_MEMBER_SAME_ROLE",
+            message=(
+                f"Both members are already in the '{role}' group — no swap needed"
+                if role
+                else "Both members already have the same role"
+            ),
+            status_code=400,
+            details=details,
+        )
 class CannotModifyTeamDuringActiveContest(AppException):
     """Raised when a team roster/deletion is attempted while the team is in an ACTIVE contest. HTTP 409."""
 

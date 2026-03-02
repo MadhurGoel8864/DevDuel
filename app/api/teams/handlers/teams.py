@@ -11,6 +11,7 @@ from app.api.teams.schemas.teams import (
     AddMemberRequest,
     CanJoinResponse,
     CanJoinResponseData,
+    SwapRolesRequest,
     TeamCreateRequest,
     TeamListResponse,
     TeamResponse,
@@ -90,6 +91,25 @@ async def remove_member_handler(
         requesting_user_id=current_user.user_id,
     )
     team = await team_service.get_team(team_id=team_id)
+    return TeamResponse(data=TeamResponseData.model_validate(team))
+
+
+async def swap_roles_handler(
+    team_id: str = Path(..., description="Team ID"),
+    request: SwapRolesRequest = Body(...),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    team_service: TeamService = Depends(get_team_service),
+) -> TeamResponse:
+    """Swap roles between two team members. Only the team creator can perform this action.
+    member1_id and member2_id must be TeamMember IDs (not User IDs) and must belong
+    to this team. Both members must currently have different roles.
+    """
+    team = await team_service.swap_member_roles(
+        team_id=team_id,
+        member1_id=request.data.member1_id,
+        member2_id=request.data.member2_id,
+        requesting_user_id=current_user.user_id,
+    )
     return TeamResponse(data=TeamResponseData.model_validate(team))
 
 

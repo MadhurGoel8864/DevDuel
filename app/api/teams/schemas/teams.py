@@ -33,6 +33,15 @@ class AddMemberRequest(BaseSchema):
     data: AddMemberData
 
 
+class SwapRolesData(BaseSchema):
+    member1_id: str
+    member2_id: str  # TeamMember.id (not User.id)
+
+
+class SwapRolesRequest(BaseSchema):
+    data: SwapRolesData
+
+
 # ── Response Schemas ───────────────────────────────────────────────────────────
 
 
