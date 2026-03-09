@@ -13,6 +13,11 @@ from app.core.exceptions.contests import (
     InvalidContestStateTransition,
     RegistrationClosedException,
 )
+from app.core.exceptions.problems import (
+    InvalidProblemOrderException,
+    ProblemAlreadyInContestException,
+    ProblemNotFoundException,
+)
 from app.core.exceptions.teams import (
     CannotModifyTeamDuringActiveContest,
     NotTeamCreatorException,
@@ -53,4 +58,8 @@ __all__ = [
     "RegistrationClosedException",
     "InvalidContestStateTransition",
     "BadRequestException",
+    # Problem exceptions
+    "ProblemNotFoundException",
+    "ProblemAlreadyInContestException",
+    "InvalidProblemOrderException",
 ]

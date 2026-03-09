@@ -187,7 +187,15 @@ async def validation_exception_handler(
     # Extract validation errors if available
     details = None
     if hasattr(exc, "errors"):
-        details = {"validation_errors": exc.errors()}
+        raw_errors = exc.errors()
+        # Pydantic v2 puts the raw ValueError instance in ctx["error"], which
+        # is not JSON-serializable. Convert any non-primitive ctx values to str.
+        sanitized = []
+        for err in raw_errors:
+            if "ctx" in err and isinstance(err.get("ctx"), dict):
+                err = {**err, "ctx": {k: str(v) for k, v in err["ctx"].items()}}
+            sanitized.append(err)
+        details = {"validation_errors": sanitized}
 
     error_response = ErrorResponse(
         code="VALIDATION_ERROR",
