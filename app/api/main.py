@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth.routes import AuthRouter, OAuthRouter
 from app.api.contests.routes.contests import router as contests_router
+from app.api.problems.routes.problems import contest_problems_router, problems_router
 from app.api.teams.routes.teams import router as teams_router
 from app.api.users.routes.users import router as users_router
 from app.core.database import get_db
@@ -31,3 +32,5 @@ api_router.include_router(AuthRouter)
 api_router.include_router(OAuthRouter)
 api_router.include_router(teams_router)
 api_router.include_router(contests_router)
+api_router.include_router(problems_router)
+api_router.include_router(contest_problems_router)

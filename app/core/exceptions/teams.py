@@ -106,6 +106,8 @@ class TeamMemberSameRoleException(AppException):
             status_code=400,
             details=details,
         )
+
+
 class CannotModifyTeamDuringActiveContest(AppException):
     """Raised when a team roster/deletion is attempted while the team is in an ACTIVE contest. HTTP 409."""
 
