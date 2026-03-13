@@ -40,3 +40,19 @@ class Difficulty(str, Enum):
     EASY = "easy"
     MEDIUM = "medium"
     HARD = "hard"
+
+
+class AuctionStatus(str, Enum):
+    """Lifecycle status for a ProblemAuction."""
+
+    PENDING = "PENDING"
+    ACTIVE = "ACTIVE"
+    FINISHED = "FINISHED"
+
+
+class AssignmentStatus(str, Enum):
+    """Status of a ContestProblemAssignment."""
+
+    ASSIGNED = "ASSIGNED"
+    SOLVED = "SOLVED"
+    FAILED = "FAILED"
