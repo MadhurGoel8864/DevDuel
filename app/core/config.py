@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     OTP_EXPIRE_SECONDS: int = 300  # 5 minutes
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     @property
     def database_url(self) -> str:
