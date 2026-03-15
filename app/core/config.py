@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # App
-    app_name: str = Field(default="GoPool")
+    app_name: str = Field(default="DevDual")
     debug: bool = Field(default=False)
     env: str = Field(default="development")
 
