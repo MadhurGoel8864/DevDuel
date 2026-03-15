@@ -23,6 +23,8 @@ from app.api.auth.schemas import (
     ProtectedRouteResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
+    RegisterRequest,
+    RegisterResponse,
     ResetPasswordRequest,
     SendOTPRequest,
     SendOTPResponse,
@@ -33,6 +35,11 @@ from app.api.auth.schemas import (
 )
 from app.api.auth.services import AuthService, get_auth_service
 from app.api.common.responses import MessageResponse
+from app.api.teams.services.team_invites import (
+    TeamInviteService,
+    get_team_invite_service,
+)
+from app.api.users.schemas.users import UserCreateData
 from app.api.users.services.users import UserService, get_user_service
 from app.core.enums import PlatformType
 from app.services.email import email_service
@@ -154,9 +161,65 @@ async def refresh_token_handler(
     )
 
 
+async def register_handler(
+    request: RegisterRequest,
+    background_tasks: BackgroundTasks,
+    user_service: UserService = Depends(get_user_service),
+    invite_service: TeamInviteService = Depends(get_team_invite_service),
+) -> RegisterResponse:
+    """
+    Register a new user.
+
+    If invite_token is present:
+      1. Token is validated upfront — if invalid/expired, entire request is rejected
+         so no orphaned user account is created.
+      2. User is created normally and OTP is sent.
+      3. invite_token is stored in Redis as pending_team_join:{user_id}
+      4. When user verifies OTP → they are automatically added to the team.
+    """
+    # Validate invite token upfront before creating the user
+    # so we don't create orphaned accounts for invalid invites
+    if request.invite_token:
+        await invite_service.validate_token(request.invite_token)
+
+    # Create user (sends OTP email internally via background task)
+    user_data = UserCreateData(
+        email=request.email,
+        password=request.password,
+        full_name=request.full_name,
+    )
+    new_user = await user_service.create_user(
+        user_data=user_data,
+        background_tasks=background_tasks,
+    )
+
+    # Store pending team join — consumed automatically when OTP is verified
+    if request.invite_token:
+        await invite_service.store_pending_join(
+            user_id=new_user.id,
+            invite_token=request.invite_token,
+        )
+        logger.info(
+            f"Pending team join stored for new user {new_user.id} via invite token"
+        )
+
+    return RegisterResponse(
+        message=(
+            "Registration successful. Please check your email to verify your account."
+            + (
+                " You will be added to the team after verification."
+                if request.invite_token
+                else ""
+            )
+        ),
+        email=request.email,
+    )
+
+
 async def verify_otp_handler(
     request: VerifyOTPRequest,
     auth_service: AuthService = Depends(get_auth_service),
+    invite_service: TeamInviteService = Depends(get_team_invite_service),
 ) -> VerifyOTPResponse:
     """
     Verify OTP and update user verification status.
@@ -179,6 +242,16 @@ async def verify_otp_handler(
         email=request.email,
         otp=request.otp,
     )
+
+    # If verification succeeded, check for pending team join
+    # (user registered via invite link — auto-add them to the team now)
+    if result.is_verified:
+        user = await auth_service._user_dao.get_by_email(request.email)
+        if user:
+            await invite_service.consume_pending_join(
+                user_id=user.id,
+                verified_email=user.email,
+            )
 
     return VerifyOTPResponse(
         message=result.message,

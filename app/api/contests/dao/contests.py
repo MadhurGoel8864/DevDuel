@@ -1,15 +1,17 @@
 """Contests Data Access Object"""
 
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.enums import ContestStatus
 from app.database.models.contests import Contest, TeamContest
+from app.database.models.teams import TeamMember
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +93,34 @@ class ContestDAO:
             )
             raise e
 
+    async def update_contest(
+        self,
+        contest: Contest,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> Contest:
+        """
+        Partial update — only provided (non-None) fields are applied.
+        Returns the updated Contest instance.
+        """
+        try:
+            contest.name = name
+            if description is not None:
+                contest.description = description
+            contest.start_time = start_time
+            contest.end_time = end_time
+
+            self._session.add(contest)
+            await self._session.commit()
+            await self._session.refresh(contest)
+            return contest
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to update contest {contest.id}: {e}")
+            raise e
+
 
 class TeamContestDAO:
     """Data Access Object for TeamContest join model."""
@@ -135,6 +165,27 @@ class TeamContestDAO:
             logger.error(f"Failed to get registrations for contest {contest_id}: {e}")
             raise e
 
+    async def get_active_registrations_by_contest(
+        self, contest_id: str
+    ) -> list[TeamContest]:
+        """
+        Return only is_active=TRUE registrations for a contest.
+        Used for leaderboard — inactive teams are hidden.
+        """
+        try:
+            result = await self._session.execute(
+                select(TeamContest).where(
+                    TeamContest.contest_id == contest_id,
+                    TeamContest.is_active == True,  
+                )
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(
+                f"Failed to get active registrations for contest {contest_id}: {e}"
+            )
+            raise e
+
     async def get_by_team(self, team_id: str) -> list[TeamContest]:
         try:
             result = await self._session.execute(
@@ -163,6 +214,132 @@ class TeamContestDAO:
             return list(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to get active contests for team {team_id}: {e}")
+            raise e
+
+    async def get_open_or_active_contests_for_team(
+        self, team_id: str
+    ) -> list[TeamContest]:
+        """Return TeamContest rows where contest is REGISTRATION_OPEN or ACTIVE."""
+        try:
+            result = await self._session.execute(
+                select(TeamContest)
+                .join(Contest, TeamContest.contest_id == Contest.id)
+                .where(
+                    TeamContest.team_id == team_id,
+                    Contest.status.in_([
+                        ContestStatus.REGISTRATION_OPEN,
+                        ContestStatus.ACTIVE,
+                    ]),
+                )
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(
+                f"Failed to get open/active contests for team {team_id}: {e}"
+            )
+            raise e
+
+    async def get_inactive_contests_for_team(self, team_id: str) -> list[TeamContest]:
+        """Return TeamContest rows where is_active=FALSE for the given team."""
+        try:
+            result = await self._session.execute(
+                select(TeamContest).where(
+                    TeamContest.team_id == team_id,
+                    TeamContest.is_active == False,  # noqa: E712
+                )
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(
+                f"Failed to get inactive contests for team {team_id}: {e}"
+            )
+            raise e
+
+    async def set_inactive(self, team_id: str, contest_id: str) -> None:
+        """Mark a team's registration as inactive for a contest."""
+        try:
+            tc = await self.get(team_id=team_id, contest_id=contest_id)
+            if tc:
+                tc.is_active = False
+                self._session.add(tc)
+                await self._session.commit()
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(
+                f"Failed to set inactive for team {team_id} contest {contest_id}: {e}"
+            )
+            raise e
+
+    async def set_active(self, team_id: str, contest_id: str) -> None:
+        """Re-activate a team's registration for a contest."""
+        try:
+            tc = await self.get(team_id=team_id, contest_id=contest_id)
+            if tc:
+                tc.is_active = True
+                self._session.add(tc)
+                await self._session.commit()
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(
+                f"Failed to set active for team {team_id} contest {contest_id}: {e}"
+            )
+            raise e
+
+    async def has_member_overlap(self, team_id: str, contest_id: str) -> bool:
+        """
+        Check if any member of team_id is already in contest_id via another team.
+        Uses EXISTS query for efficiency.
+        """
+        try:
+            stmt = exists().where(
+                TeamContest.contest_id == contest_id,
+                TeamContest.team_id != team_id,
+                TeamMember.team_id == TeamContest.team_id,
+                TeamMember.user_id.in_(
+                    select(TeamMember.user_id).where(TeamMember.team_id == team_id)
+                ),
+            )
+            result = await self._session.execute(select(stmt))
+            return result.scalar()
+        except Exception as e:
+            logger.error(f"Failed to check member overlap: {e}")
+            raise e
+
+    async def has_member_in_active_contest(self, team_id: str) -> bool:
+        """
+        Check if any member of the team is already in an ACTIVE contest.
+        Enforces one-active-contest rule per user.
+        """
+        try:
+            stmt = exists().where(
+                TeamContest.team_id != team_id,
+                TeamContest.is_active == True,  
+                TeamMember.team_id == TeamContest.team_id,
+                Contest.id == TeamContest.contest_id,
+                Contest.status == ContestStatus.ACTIVE,
+                TeamMember.user_id.in_(
+                    select(TeamMember.user_id).where(TeamMember.team_id == team_id)
+                ),
+            )
+            result = await self._session.execute(select(stmt))
+            return result.scalar()
+        except Exception as e:
+            logger.error(f"Failed to check active contest for team {team_id}: {e}")
+            raise e
+
+    async def get_registered_team_ids(self, contest_id: str) -> list[str]:
+        """Return all team_ids registered for a contest."""
+        try:
+            result = await self._session.execute(
+                select(TeamContest.team_id).where(
+                    TeamContest.contest_id == contest_id
+                )
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(
+                f"Failed to get registered team ids for contest {contest_id}: {e}"
+            )
             raise e
 
 

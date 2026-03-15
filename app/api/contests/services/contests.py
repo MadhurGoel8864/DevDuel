@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime
+from typing import Optional
 
 from fastapi import Depends
 
@@ -11,14 +12,16 @@ from app.api.contests.dao.contests import (
     get_contest_dao,
     get_team_contest_dao,
 )
+from app.api.teams.dao.teams import TeamMemberDAO, get_team_member_dao
 from app.api.teams.services.teams import TeamService, get_team_service
+from app.api.users.dao.users import UserDAO, get_user_dao
+from app.core.exceptions.common import BadRequestException
 from app.core.enums import ContestStatus
 from app.core.exceptions.contests import (
-    ContestAlreadyRegisteredException,
-    ContestNotFoundException,
-    InvalidContestStateTransition,
-    RegistrationClosedException,
-)
+    ContestAlreadyRegisteredException, ContestEditNotAllowedException,
+    ContestNotFoundException, InvalidContestStateTransition,
+    MemberAlreadyInActiveContestException, MemberAlreadyInContestException,
+    RegistrationClosedException)
 from app.core.exceptions.teams import NotTeamCreatorException
 from app.database.models.contests import Contest, TeamContest
 
@@ -54,10 +57,14 @@ class ContestService:
         contest_dao: ContestDAO,
         team_contest_dao: TeamContestDAO,
         team_service: TeamService,
+        member_dao: TeamMemberDAO,
+        user_dao: UserDAO,
     ):
         self._contest_dao = contest_dao
         self._team_contest_dao = team_contest_dao
         self._team_service = team_service
+        self._member_dao = member_dao
+        self._user_dao = user_dao
 
     async def create_contest(
         self,
@@ -65,7 +72,7 @@ class ContestService:
         start_time: datetime,
         end_time: datetime,
         created_by: str,
-        description: str | None = None,
+        description: Optional[str] = None,
     ) -> Contest:
         """
         Create a new contest. Starts in DRAFT status.
@@ -158,9 +165,105 @@ class ContestService:
         )
         return updated
 
-    # ------------------------------------------------------------------
-    # Registration
-    # ------------------------------------------------------------------
+    async def edit_contest(
+        self,
+        contest_id: str,
+        requesting_user_id: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> tuple[Contest, dict]:
+        """
+        Partially update a contest. Only provided fields are changed.
+
+        Rules:
+          - Only the contest creator can edit.
+          - Cannot edit a contest with ENDED status.
+          - At least one field must be provided.
+
+        Returns:
+            Tuple of (updated_contest, diff) where diff contains only changed
+            fields in format: { "field": { "old": x, "new": y } }
+            If diff is empty, nothing actually changed.
+
+        Raises:
+            ContestNotFoundException, NotTeamCreatorException,
+            ContestEditNotAllowedException, BadRequestException
+        """
+        contest = await self.get_contest(contest_id)
+
+        if contest.created_by != requesting_user_id:
+            raise NotTeamCreatorException(
+                message="Only the contest creator can edit the contest"
+            )
+
+        if contest.status == ContestStatus.ENDED:
+            raise ContestEditNotAllowedException(contest_id=contest_id)
+
+        # At least one field must be provided
+        if all(v is None for v in [name, description, start_time, end_time]):
+
+            raise BadRequestException(message="No fields provided to update")
+
+        # Capture old values BEFORE updating for diff
+        old_values = {
+            "name": contest.name,
+            "description": contest.description,
+            "start_time": contest.start_time,
+            "end_time": contest.end_time,
+        }
+
+        # Apply update
+        updated = await self._contest_dao.update_contest(
+            contest=contest,
+            name=name,
+            description=description,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+        # Build diff — only fields that actually changed
+        new_values = {
+            "name": updated.name,
+            "description": updated.description,
+            "start_time": updated.start_time,
+            "end_time": updated.end_time,
+        }
+
+        diff = {}
+        for field, old_val in old_values.items():
+            new_val = new_values[field]
+            if old_val != new_val:
+                diff[field] = {"old": old_val, "new": new_val}
+
+        logger.info(
+            f"Contest {contest_id} updated by {requesting_user_id}. "
+            f"Changed fields: {list(diff.keys())}"
+        )
+
+        return updated, diff
+
+    async def get_contest_member_emails(self, contest_id: str) -> list[str]:
+        """
+        Return emails of ALL members across ALL teams registered for this contest.
+        Used to send update notification emails.
+        Both active and inactive team registrations are included —
+        all members deserve to be notified of changes.
+        """
+        team_ids = await self._team_contest_dao.get_registered_team_ids(contest_id)
+        if not team_ids:
+            return []
+
+        emails: set[str] = set()
+        for team_id in team_ids:
+            members = await self._member_dao.get_by_team(team_id)
+            for member in members:
+                user = await self._user_dao.get_by_id(member.user_id)
+                if user and user.email:
+                    emails.add(user.email)
+
+        return list(emails)
 
     async def register_team(
         self,
@@ -208,6 +311,18 @@ class ContestService:
             raise ContestAlreadyRegisteredException(
                 team_id=team_id, contest_id=contest_id
             )
+
+        has_overlap = await self._team_contest_dao.has_member_overlap(
+            team_id=team_id, contest_id=contest_id
+        )
+        if has_overlap:
+            raise MemberAlreadyInContestException(contest_id=contest_id)
+
+        in_active = await self._team_contest_dao.has_member_in_active_contest(
+            team_id=team_id
+        )
+        if in_active:
+            raise MemberAlreadyInActiveContestException(team_id=team_id)
 
         registration = await self._team_contest_dao.register(
             team_id=team_id, contest_id=contest_id
@@ -272,7 +387,9 @@ class ContestService:
         """
         await self.get_contest(contest_id)  # validates existence
 
-        registrations = await self._team_contest_dao.get_by_contest(contest_id)
+        registrations = (
+            await self._team_contest_dao.get_active_registrations_by_contest(contest_id)
+        )
         sorted_teams = sorted(
             registrations,
             key=lambda r: (r.score, r.currency),
@@ -282,12 +399,11 @@ class ContestService:
 
     async def get_team_in_contest_safe(
         self, contest_id: str, team_id: str
-    ) -> TeamContest | None:
-        """
-        Non-raising version of get_team_in_contest.
-        Returns None if the team is not registered — used for pre-checks like can-join.
-        """
+    ) -> Optional[TeamContest]:
         return await self._team_contest_dao.get(team_id=team_id, contest_id=contest_id)
+
+    async def get_contest_member_user_ids(self, contest_id: str) -> set[str]:
+        return await self._team_contest_dao.get_contest_user_ids(contest_id)
 
 
 # ── Dependency ─────────────────────────────────────────────────────────────────
@@ -297,9 +413,13 @@ async def get_contest_service(
     contest_dao: ContestDAO = Depends(get_contest_dao),
     team_contest_dao: TeamContestDAO = Depends(get_team_contest_dao),
     team_service: TeamService = Depends(get_team_service),
+    member_dao: TeamMemberDAO = Depends(get_team_member_dao),
+    user_dao: UserDAO = Depends(get_user_dao),
 ) -> ContestService:
     return ContestService(
         contest_dao=contest_dao,
         team_contest_dao=team_contest_dao,
         team_service=team_service,
+        member_dao=member_dao,
+        user_dao=user_dao,
     )

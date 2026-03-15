@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -58,6 +59,11 @@ class TeamContest(Base, TimestampMixin):
 
     currency = mapped_column(Integer, default=1000, nullable=False)
     score = mapped_column(Integer, default=0, nullable=False)
+
+    # True  = team is actively competing
+    # False = a member left mid-contest, team is frozen
+    #         record preserved for history
+    is_active = mapped_column(Boolean, default=True, nullable=False)
 
     team = relationship("Team", back_populates="contests")
     contest = relationship("Contest", back_populates="teams")

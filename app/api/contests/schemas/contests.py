@@ -36,6 +36,19 @@ class RegisterTeamRequest(BaseSchema):
     data: RegisterTeamData
 
 
+class ContestEditData(BaseSchema):
+    """All fields optional — only provided fields are updated (partial update)."""
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+
+
+class ContestEditRequest(BaseSchema):
+    data: ContestEditData
+
+
 # ── Response Schemas ───────────────────────────────────────────────────────────
 
 

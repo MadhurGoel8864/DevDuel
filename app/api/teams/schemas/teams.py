@@ -33,13 +33,8 @@ class AddMemberRequest(BaseSchema):
     data: AddMemberData
 
 
-class SwapRolesData(BaseSchema):
-    member1_id: str
-    member2_id: str  # TeamMember.id (not User.id)
-
-
-class SwapRolesRequest(BaseSchema):
-    data: SwapRolesData
+# SwapRolesRequest removed — team has exactly 2 members,
+# service auto-fetches both and swaps without needing input.
 
 
 # ── Response Schemas ───────────────────────────────────────────────────────────

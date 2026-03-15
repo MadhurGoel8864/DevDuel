@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import Body, Depends, Path
+from fastapi import BackgroundTasks, Body, Depends, Path
 
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
@@ -10,6 +10,7 @@ from app.api.contests.schemas.contests import (
     ContestCreateRequest,
     ContestListResponse,
     ContestResponse,
+    ContestEditRequest,
     ContestResponseData,
     ContestSummaryData,
     LeaderboardEntryData,
@@ -20,8 +21,32 @@ from app.api.contests.schemas.contests import (
 )
 from app.api.contests.services.contests import ContestService, get_contest_service
 from app.core.enums import ContestStatus
+from app.services.email import email_service
+from app.services.email.templates.contest_update import contest_update_template
 
 logger = logging.getLogger(__name__)
+
+def _send_contest_update_email(
+    email: str,
+    contest_name: str,
+    diff: dict,
+) -> None:
+    """Background task — send contest update notification to a single user."""
+    try:
+        subject, html_body = contest_update_template(
+            contest_name=contest_name,
+            diff=diff,
+        )
+        email_service.send_email(
+            to_email=email,
+            subject=subject,
+            body=html_body,
+            html=True,
+        )
+        logger.info(f"Contest update email sent to {email}")
+    except Exception as e:
+        logger.error(f"Failed to send contest update email to {email}: {e}")
+
 
 
 async def create_contest_handler(
@@ -39,6 +64,50 @@ async def create_contest_handler(
     )
     logger.info(f"Contest '{contest.name}' created by user {current_user.user_id}")
     return ContestResponse(data=ContestResponseData.model_validate(contest))
+
+
+async def edit_contest_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    request: ContestEditRequest = Body(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    contest_service: ContestService = Depends(get_contest_service),
+) -> ContestResponse:
+    """
+    Partially update a contest (creator only).
+
+    Allowed in any status except ENDED.
+    All fields optional — only provided fields are updated.
+
+    If any fields actually changed AND there are registered teams,
+    an update email is sent to all team members as a background task.
+    """
+    updated_contest, diff = await contest_service.edit_contest(
+        contest_id=contest_id,
+        requesting_user_id=current_user.user_id,
+        name=request.data.name,
+        description=request.data.description,
+        start_time=request.data.start_time,
+        end_time=request.data.end_time,
+    )
+
+    # Only send emails if something actually changed
+    if diff:
+        emails = await contest_service.get_contest_member_emails(contest_id)
+        for email in emails:
+            background_tasks.add_task(
+                _send_contest_update_email,
+                email=email,
+                contest_name=updated_contest.name,
+                diff=diff,
+            )
+        if emails:
+            logger.info(
+                f"Contest update emails queued for {len(emails)} member(s) "
+                f"— contest {contest_id}"
+            )
+
+    return ContestResponse(data=ContestResponseData.model_validate(updated_contest))
 
 
 async def list_contests_handler(

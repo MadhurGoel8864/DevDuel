@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.contests.handlers.contests import (
     create_contest_handler,
+    edit_contest_handler,
     end_contest_handler,
     get_contest_handler,
     get_contest_leaderboard_handler,
@@ -24,6 +25,20 @@ router.add_api_route("", list_contests_handler, methods=["GET"])
 router.add_api_route("/active", list_active_contests_handler, methods=["GET"])
 router.add_api_route("/me", get_my_contests_handler, methods=["GET"])
 router.add_api_route("/{contest_id}", get_contest_handler, methods=["GET"])
+
+# Edit contest — PATCH (partial update, creator only, not allowed when ENDED)
+router.add_api_route(
+    "/{contest_id}",
+    edit_contest_handler,
+    methods=["PATCH"],
+    summary="Edit Contest",
+    description=(
+        "Partially update a contest. All fields optional. "
+        "Sends update email to all registered team members if anything changed. "
+        "Not allowed when contest status is ENDED."
+    ),
+)
+
 router.add_api_route(
     "/{contest_id}/register", register_team_handler, methods=["POST"], status_code=201
 )

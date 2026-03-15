@@ -7,6 +7,7 @@ from app.api.auth.handlers.auth import (
     logout_handler,
     protected_route_handler,
     refresh_token_handler,
+    register_handler,
     resend_otp_handler,
     reset_password_handler,
     send_otp_handler,

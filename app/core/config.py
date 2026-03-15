@@ -68,6 +68,15 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
+    # ── Team Invite Settings ───────────────────────────────────────────────────
+    INVITE_EXPIRE_SECONDS: int = 72 * 3600  # 72 hours — main invite TTL
+    PENDING_JOIN_EXPIRE_SECONDS: int = 24 * 3600  # 24 hours — waiting for OTP verify
+
+    # Frontend URLs embedded in invite emails
+    FRONTEND_ACCEPT_INVITE_URL: str = "http://localhost:3000/invite/accept"
+    FRONTEND_DECLINE_INVITE_URL: str = "http://localhost:3000/invite/decline"
+    FRONTEND_REGISTER_INVITE_URL: str = "http://localhost:3000/register"
+
     class Config:
         env_file = ".env"
 
