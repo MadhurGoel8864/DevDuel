@@ -55,6 +55,17 @@ class ContestDAO:
             logger.error(f"Failed to get contest by id {contest_id}: {e}")
             raise e
 
+    async def get_created_by(self, user_id: str) -> list[Contest]:
+        """Return all contests created by the given user."""
+        try:
+            result = await self._session.execute(
+                select(Contest).where(Contest.created_by == user_id)
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"Failed to get contests created by user {user_id}: {e}")
+            raise e
+
     async def get_all(self) -> list[Contest]:
         try:
             result = await self._session.execute(select(Contest))

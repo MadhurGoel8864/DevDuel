@@ -111,6 +111,10 @@ class ContestService:
         """Return only contests with ACTIVE status."""
         return await self._contest_dao.get_active()
 
+    async def list_created_contests(self, user_id: str) -> list[Contest]:
+        """Return all contests created by the given user."""
+        return await self._contest_dao.get_created_by(user_id)
+
     # ------------------------------------------------------------------
     # Lifecycle State Machine
     # ------------------------------------------------------------------
