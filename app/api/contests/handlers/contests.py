@@ -8,9 +8,9 @@ from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
 from app.api.contests.schemas.contests import (
     ContestCreateRequest,
+    ContestEditRequest,
     ContestListResponse,
     ContestResponse,
-    ContestEditRequest,
     ContestResponseData,
     ContestSummaryData,
     LeaderboardEntryData,
@@ -25,6 +25,7 @@ from app.services.email import email_service
 from app.services.email.templates.contest_update import contest_update_template
 
 logger = logging.getLogger(__name__)
+
 
 def _send_contest_update_email(
     email: str,
@@ -46,7 +47,6 @@ def _send_contest_update_email(
         logger.info(f"Contest update email sent to {email}")
     except Exception as e:
         logger.error(f"Failed to send contest update email to {email}: {e}")
-
 
 
 async def create_contest_handler(

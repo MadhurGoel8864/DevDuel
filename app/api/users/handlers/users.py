@@ -4,11 +4,15 @@ import logging
 
 from fastapi import BackgroundTasks, Body, Depends, Path
 
-from app.api.users.schemas.users import (UserCreateRequest, UserCreateResponse,
-                                         UserCreateResponseData,
-                                         UserGetResponse, UserGetResponseData,
-                                         UserListResponse,
-                                         UserListResponseData)
+from app.api.users.schemas.users import (
+    UserCreateRequest,
+    UserCreateResponse,
+    UserCreateResponseData,
+    UserGetResponse,
+    UserGetResponseData,
+    UserListResponse,
+    UserListResponseData,
+)
 from app.api.users.services.users import UserService, get_user_service
 
 logger = logging.getLogger(__name__)
