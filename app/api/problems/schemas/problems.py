@@ -137,3 +137,37 @@ ProblemResponse = APIResponse[ProblemResponseData]
 ProblemListResponse = APIResponse[list[ProblemResponseData]]
 ContestProblemResponse = APIResponse[ContestProblemResponseData]
 ContestProblemListResponse = APIResponse[list[ContestProblemResponseData]]
+
+
+class BuiltinProblemResponseData(BaseSchema, ISTDatetimeMixin):
+    """Response schema for a single built-in (platform-curated) problem."""
+
+    id: str
+    title: str
+    slug: str
+    description: str
+    difficulty: Difficulty
+    points: int
+    base_price: int
+    time_limit_ms: int
+    memory_limit_mb: int
+    created_at: datetime
+
+
+class ImportBuiltinProblemData(BaseSchema):
+    builtin_problem_id: str
+    problem_order: int
+
+    @field_validator("problem_order")
+    @classmethod
+    def order_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("problem_order must be >= 1")
+        return v
+
+
+class ImportBuiltinProblemRequest(BaseSchema):
+    data: ImportBuiltinProblemData
+
+
+BuiltinProblemListResponse = APIResponse[list[BuiltinProblemResponseData]]
