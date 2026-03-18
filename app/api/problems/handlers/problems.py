@@ -8,13 +8,20 @@ from fastapi import Body, Depends, Path, Query
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
 from app.api.problems.schemas.problems import (
+    BuiltinProblemListResponse,
+    BuiltinProblemResponseData,
     ProblemCreateRequest,
     ProblemListResponse,
     ProblemResponse,
     ProblemResponseData,
     ProblemUpdateRequest,
 )
-from app.api.problems.services.problems import ProblemService, get_problem_service
+from app.api.problems.services.problems import (
+    BuiltinProblemService,
+    ProblemService,
+    get_builtin_problem_service,
+    get_problem_service,
+)
 from app.core.enums import Difficulty
 
 logger = logging.getLogger(__name__)
@@ -101,3 +108,23 @@ async def delete_problem_handler(
     )
     logger.info(f"Problem {problem_id} soft-deleted by {current_user.user_id}")
     return ProblemResponse(data=ProblemResponseData.model_validate(problem))
+
+
+async def list_builtin_problems_handler(
+    difficulty: Optional[Difficulty] = Query(default=None),
+    search: Optional[str] = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    builtin_service: BuiltinProblemService = Depends(get_builtin_problem_service),
+) -> BuiltinProblemListResponse:
+    """List all active built-in problems. Supports difficulty and search filters."""
+    problems = await builtin_service.list_builtin_problems(
+        difficulty=difficulty,
+        search=search,
+        page=page,
+        limit=limit,
+    )
+    return BuiltinProblemListResponse(
+        data=[BuiltinProblemResponseData.model_validate(p) for p in problems]
+    )

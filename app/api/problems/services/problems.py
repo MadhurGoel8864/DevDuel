@@ -6,8 +6,10 @@ import re
 from fastapi import Depends
 
 from app.api.problems.dao.problems import (
+    BuiltinProblemDAO,
     ContestProblemDAO,
     ProblemDAO,
+    get_builtin_problem_dao,
     get_contest_problem_dao,
     get_problem_dao,
 )
@@ -15,11 +17,12 @@ from app.core.enums import Difficulty
 from app.core.exceptions.common import BadRequestException
 from app.core.exceptions.contests import ContestNotFoundException
 from app.core.exceptions.problems import (
+    BuiltinProblemNotFoundException,
     InvalidProblemOrderException,
     ProblemAlreadyInContestException,
     ProblemNotFoundException,
 )
-from app.database.models.problems import ContestProblem, Problem
+from app.database.models.problems import BuiltinProblem, ContestProblem, Problem
 
 logger = logging.getLogger(__name__)
 
@@ -265,6 +268,114 @@ class ContestProblemService:
         return removed
 
 
+class BuiltinProblemService:
+    """Business logic for browsing and importing built-in problems."""
+
+    def __init__(
+        self,
+        builtin_problem_dao: BuiltinProblemDAO,
+        problem_dao: ProblemDAO,
+        contest_problem_dao: ContestProblemDAO,
+    ):
+        self._builtin_dao = builtin_problem_dao
+        self._problem_dao = problem_dao
+        self._cp_dao = contest_problem_dao
+
+    async def list_builtin_problems(
+        self,
+        difficulty: Difficulty | None = None,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 20,
+    ) -> list[BuiltinProblem]:
+        """Return active built-in problems with optional filters."""
+        return await self._builtin_dao.list_all(
+            difficulty=difficulty,
+            search=search,
+            page=page,
+            limit=limit,
+        )
+
+    async def import_builtin_problem_to_contest(
+        self,
+        builtin_problem_id: str,
+        contest_id: str,
+        problem_order: int,
+        requesting_user_id: str,
+    ) -> ContestProblem:
+        """Clone a built-in problem into a user-owned Problem and attach it to a contest.
+
+        Steps:
+            1. Validate the builtin problem exists and is active.
+            2. Validate the contest exists.
+            3. Validate problem_order uniqueness within the contest.
+            4. Create a new Problem (owned by the requesting user).
+            5. Attach the new Problem to the contest via ContestProblem.
+
+        Raises:
+            BuiltinProblemNotFoundException, ContestNotFoundException,
+            InvalidProblemOrderException, ProblemAlreadyInContestException.
+        """
+        # 1. Validate built-in problem
+        builtin = await self._builtin_dao.get_by_id(builtin_problem_id)
+        if not builtin or not builtin.is_active:
+            raise BuiltinProblemNotFoundException(builtin_problem_id=builtin_problem_id)
+
+        # 2. Validate contest exists
+        if not await self._cp_dao.contest_exists(contest_id):
+            raise ContestNotFoundException(contest_id=contest_id)
+
+        # 3. Validate problem_order
+        if problem_order < 1:
+            raise InvalidProblemOrderException(message="problem_order must be >= 1")
+
+        order_conflict = await self._cp_dao.get_by_contest_and_order(
+            contest_id=contest_id, problem_order=problem_order
+        )
+        if order_conflict:
+            raise InvalidProblemOrderException(
+                message=f"problem_order {problem_order} is already taken in this contest"
+            )
+
+        # 4. Clone the built-in problem into a user-owned Problem row
+        base_slug = _generate_slug(builtin.title)
+        # Re-use ProblemService._unique_slug logic inline
+        candidate = base_slug
+        counter = 2
+        while await self._problem_dao.slug_exists(candidate):
+            candidate = f"{base_slug}-{counter}"
+            counter += 1
+        slug = candidate
+
+        new_problem = await self._problem_dao.create(
+            title=builtin.title,
+            slug=slug,
+            description=builtin.description,
+            difficulty=builtin.difficulty,
+            points=builtin.points,
+            base_price=builtin.base_price,
+            created_by=requesting_user_id,
+            time_limit_ms=builtin.time_limit_ms,
+            memory_limit_mb=builtin.memory_limit_mb,
+        )
+        logger.info(
+            f"Builtin problem '{builtin.title}' cloned as Problem {new_problem.id} "
+            f"by user {requesting_user_id}"
+        )
+
+        # 5. Attach new problem to contest
+        cp = await self._cp_dao.add(
+            contest_id=contest_id,
+            problem_id=new_problem.id,
+            problem_order=problem_order,
+        )
+        logger.info(
+            f"Cloned problem {new_problem.id} attached to contest {contest_id} "
+            f"at order {problem_order} by {requesting_user_id}"
+        )
+        return cp
+
+
 # ── Dependencies ────────────────────────────────────────────────────────────────
 
 
@@ -279,6 +390,18 @@ async def get_contest_problem_service(
     contest_problem_dao: ContestProblemDAO = Depends(get_contest_problem_dao),
 ) -> ContestProblemService:
     return ContestProblemService(
+        problem_dao=problem_dao,
+        contest_problem_dao=contest_problem_dao,
+    )
+
+
+async def get_builtin_problem_service(
+    builtin_problem_dao: BuiltinProblemDAO = Depends(get_builtin_problem_dao),
+    problem_dao: ProblemDAO = Depends(get_problem_dao),
+    contest_problem_dao: ContestProblemDAO = Depends(get_contest_problem_dao),
+) -> BuiltinProblemService:
+    return BuiltinProblemService(
+        builtin_problem_dao=builtin_problem_dao,
         problem_dao=problem_dao,
         contest_problem_dao=contest_problem_dao,
     )
