@@ -11,10 +11,13 @@ from app.api.problems.schemas.problems import (
     ContestProblemListResponse,
     ContestProblemResponse,
     ContestProblemResponseData,
+    ImportBuiltinProblemRequest,
     ProblemResponseData,
 )
 from app.api.problems.services.problems import (
+    BuiltinProblemService,
     ContestProblemService,
+    get_builtin_problem_service,
     get_contest_problem_service,
 )
 
@@ -68,5 +71,31 @@ async def remove_problem_from_contest_handler(
     logger.info(
         f"ContestProblem {contest_problem_id} removed from contest {contest_id} "
         f"by {current_user.user_id}"
+    )
+    return ContestProblemResponse(data=ContestProblemResponseData.model_validate(cp))
+
+
+async def import_builtin_problem_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    request: ImportBuiltinProblemRequest = Body(...),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    builtin_service: BuiltinProblemService = Depends(get_builtin_problem_service),
+) -> ContestProblemResponse:
+    """Import a built-in problem into a contest.
+
+    Clones the platform problem into a user-owned Problem row and attaches
+    it to the contest as a ContestProblem with the given problem_order.
+    The creator can later update the problem's title/description/etc via
+    the standard PUT /problems/{problem_id} endpoint.
+    """
+    cp = await builtin_service.import_builtin_problem_to_contest(
+        builtin_problem_id=request.data.builtin_problem_id,
+        contest_id=contest_id,
+        problem_order=request.data.problem_order,
+        requesting_user_id=current_user.user_id,
+    )
+    logger.info(
+        f"Builtin problem {request.data.builtin_problem_id} imported into "
+        f"contest {contest_id} by {current_user.user_id}"
     )
     return ContestProblemResponse(data=ContestProblemResponseData.model_validate(cp))

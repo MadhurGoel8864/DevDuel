@@ -1,4 +1,4 @@
-"""Problem and ContestProblem SQLAlchemy models."""
+"""Problem, ContestProblem, and BuiltinProblem SQLAlchemy models."""
 
 from sqlalchemy import (
     Boolean,
@@ -61,6 +61,47 @@ class Problem(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_problem_difficulty", "difficulty"),
         Index("ix_problem_slug", "slug", unique=True),
+    )
+
+
+class BuiltinProblem(Base):
+    """Platform-curated coding problem available for contest creators to import."""
+
+    __tablename__ = "builtin_problems"
+
+    id = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    title = mapped_column(String(255), nullable=False)
+    slug = mapped_column(String(300), nullable=False, unique=True)
+    description = mapped_column(Text, nullable=False)
+    difficulty = mapped_column(
+        Enum(
+            Difficulty,
+            name="difficulty",
+            values_callable=lambda enum: [e.value for e in enum],
+        ),
+        nullable=False,
+    )
+    points = mapped_column(Integer, nullable=False)
+    base_price = mapped_column(Integer, nullable=False)
+    time_limit_ms = mapped_column(Integer, default=2000, nullable=False)
+    memory_limit_mb = mapped_column(Integer, default=256, nullable=False)
+    is_active = mapped_column(Boolean, default=True, nullable=False)
+
+    created_at = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.timezone("Asia/Kolkata", func.now()),
+        nullable=False,
+    )
+    updated_at = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.timezone("Asia/Kolkata", func.now()),
+        onupdate=func.timezone("Asia/Kolkata", func.now()),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("ix_builtin_problem_difficulty", "difficulty"),
+        Index("ix_builtin_problem_slug", "slug", unique=True),
     )
 
 
