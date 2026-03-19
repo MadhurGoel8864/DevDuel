@@ -40,19 +40,42 @@ async def bidding_ws_endpoint(
       5. On error, send ERROR message back to the sender only.
       6. Client disconnects  →  removed from the room.
     """
+    client_host = websocket.client.host if websocket.client else "unknown"
+    logger.info(
+        f"[WS:CONNECT] client={client_host} | contest={contest_id} | "
+        f"room_size_after={len(manager._rooms[contest_id]) + 1}"
+    )
+
     await manager.connect(websocket, contest_id)
+
     try:
         while True:
+            # ── Receive raw message ────────────────────────────────────────────
             try:
                 raw = await websocket.receive_text()
+            except WebSocketDisconnect:
+                raise  # let the outer except handle it
+
+            logger.debug(
+                f"[WS:RECV] contest={contest_id} | client={client_host} | raw={raw[:200]}"
+            )
+
+            try:
                 data = json.loads(raw)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"[WS:INVALID_JSON] contest={contest_id} | client={client_host} | "
+                    f"error={e} | raw={raw[:100]!r}"
+                )
                 await websocket.send_text(
                     json.dumps({"type": "ERROR", "message": "Invalid JSON"})
                 )
                 continue
 
             msg_type = data.get("type", "")
+            logger.debug(
+                f"[WS:MSG_TYPE] contest={contest_id} | type={msg_type!r} | client={client_host}"
+            )
 
             # ── PLACE_BID ─────────────────────────────────────────────────────
             if msg_type == "PLACE_BID":
@@ -61,7 +84,18 @@ async def bidding_ws_endpoint(
                 user_id = data.get("user_id", "")
                 auction_id = data.get("auction_id", "")
 
+                logger.info(
+                    f"[WS:PLACE_BID] contest={contest_id} | auction={auction_id} | "
+                    f"team={team_id} | user={user_id} | amount={amount}"
+                )
+
+                # Input validation
                 if not team_id or not auction_id or not user_id or amount <= 0:
+                    logger.warning(
+                        f"[WS:PLACE_BID:INVALID_INPUT] contest={contest_id} | "
+                        f"team_id={team_id!r} | user_id={user_id!r} | "
+                        f"auction_id={auction_id!r} | amount={amount!r}"
+                    )
                     await websocket.send_text(
                         json.dumps(
                             {
@@ -79,6 +113,11 @@ async def bidding_ws_endpoint(
                         user_id=user_id,
                         amount=amount,
                     )
+                    logger.info(
+                        f"[WS:PLACE_BID:SUCCESS] contest={contest_id} | auction={auction_id} | "
+                        f"team={team_id} | user={user_id} | new_highest={result['amount']} | "
+                        f"broadcasting to room"
+                    )
                     await manager.broadcast(
                         contest_id,
                         {
@@ -89,6 +128,12 @@ async def bidding_ws_endpoint(
                     )
                 except Exception as exc:
                     error_msg = getattr(exc, "message", str(exc))
+                    error_code = getattr(exc, "code", "UNKNOWN")
+                    logger.warning(
+                        f"[WS:PLACE_BID:REJECTED] contest={contest_id} | auction={auction_id} | "
+                        f"team={team_id} | user={user_id} | amount={amount} | "
+                        f"code={error_code} | reason={error_msg}"
+                    )
                     await websocket.send_text(
                         json.dumps({"type": "ERROR", "message": error_msg})
                     )
@@ -96,7 +141,17 @@ async def bidding_ws_endpoint(
             # ── FINISH_AUCTION (manual override) ──────────────────────────────
             elif msg_type == "FINISH_AUCTION":
                 auction_id = data.get("auction_id", "")
+
+                logger.info(
+                    f"[WS:FINISH_AUCTION] Manual trigger | contest={contest_id} | "
+                    f"auction={auction_id} | triggered_by=client={client_host}"
+                )
+
                 if not auction_id:
+                    logger.warning(
+                        f"[WS:FINISH_AUCTION:INVALID_INPUT] contest={contest_id} | "
+                        f"missing auction_id"
+                    )
                     await websocket.send_text(
                         json.dumps(
                             {
@@ -106,30 +161,45 @@ async def bidding_ws_endpoint(
                         )
                     )
                     continue
+
                 try:
                     assignment = await bidding_service.finish_auction(
                         auction_id=auction_id
+                    )
+                    winning_team = assignment.team_id if assignment else None
+                    winning_bid = assignment.winning_bid if assignment else None
+
+                    logger.info(
+                        f"[WS:FINISH_AUCTION:SUCCESS] contest={contest_id} | "
+                        f"auction={auction_id} | winner={winning_team!r} | "
+                        f"winning_bid={winning_bid!r} | broadcasting to room"
                     )
                     await manager.broadcast(
                         contest_id,
                         {
                             "type": "AUCTION_FINISHED",
                             "auction_id": auction_id,
-                            "winning_team_id": (
-                                assignment.team_id if assignment else None
-                            ),
-                            "winning_bid": (
-                                assignment.winning_bid if assignment else None
-                            ),
+                            "winning_team_id": winning_team,
+                            "winning_bid": winning_bid,
                         },
                     )
                 except Exception as exc:
                     error_msg = getattr(exc, "message", str(exc))
+                    error_code = getattr(exc, "code", "UNKNOWN")
+                    logger.error(
+                        f"[WS:FINISH_AUCTION:ERROR] contest={contest_id} | "
+                        f"auction={auction_id} | code={error_code} | reason={error_msg}"
+                    )
                     await websocket.send_text(
                         json.dumps({"type": "ERROR", "message": error_msg})
                     )
 
+            # ── Unknown message type ───────────────────────────────────────────
             else:
+                logger.warning(
+                    f"[WS:UNKNOWN_TYPE] contest={contest_id} | client={client_host} | "
+                    f"type={msg_type!r}"
+                )
                 await websocket.send_text(
                     json.dumps(
                         {
@@ -140,7 +210,17 @@ async def bidding_ws_endpoint(
                 )
 
     except WebSocketDisconnect:
+        room_size = len(manager._rooms.get(contest_id, []))
+        logger.info(
+            f"[WS:DISCONNECT] client={client_host} | contest={contest_id} | "
+            f"room_size_after={room_size - 1 if room_size > 0 else 0}"
+        )
         manager.disconnect(websocket, contest_id)
+
     except Exception as exc:
-        logger.error(f"Unexpected WS error in contest {contest_id}: {exc}")
+        logger.error(
+            f"[WS:CRASH] Unexpected error | contest={contest_id} | "
+            f"client={client_host} | error={exc!r}",
+            exc_info=True,
+        )
         manager.disconnect(websocket, contest_id)

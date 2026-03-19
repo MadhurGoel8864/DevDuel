@@ -132,6 +132,17 @@ async def list_active_contests_handler(
     )
 
 
+async def list_created_contests_handler(
+    current_user: UserWithPermissions = Depends(get_current_user),
+    contest_service: ContestService = Depends(get_contest_service),
+) -> ContestListResponse:
+    """List all contests created by the authenticated user."""
+    contests = await contest_service.list_created_contests(user_id=current_user.user_id)
+    return ContestListResponse(
+        data=[ContestSummaryData.model_validate(c) for c in contests]
+    )
+
+
 async def get_contest_handler(
     contest_id: str = Path(..., description="Contest ID"),
     current_user: UserWithPermissions = Depends(get_current_user),
