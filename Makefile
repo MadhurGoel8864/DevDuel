@@ -1,5 +1,5 @@
 # Project settings
-PROJECT_NAME=go-pool
+PROJECT_NAME=DevDual
 APP_MODULE=app.main:app
 HOST=127.0.0.1
 PORT=8000

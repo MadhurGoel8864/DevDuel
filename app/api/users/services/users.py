@@ -63,7 +63,7 @@ class UserService:
     ) -> User:
         """
         Create a new user with business logic validation.
-        For carpooling: validates unique email before creating user and sends OTP.
+        Validates unique email before creating a DevDuel user and sends OTP.
 
         Args:
             user_data (UserCreateData): Pydantic schema with user details.
@@ -127,7 +127,7 @@ class UserService:
     async def get_all_users(self) -> list[User]:
         """
         Get all users.
-        For carpooling: Retrieves all registered users.
+        Retrieves all registered DevDuel users.
 
         Returns:
             list[User]: List of all user instances.

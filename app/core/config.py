@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # App
-    app_name: str = Field(default="GoPool")
+    app_name: str = Field(default="DevDual")
     debug: bool = Field(default=False)
     env: str = Field(default="development")
 
@@ -35,26 +35,20 @@ class Settings(BaseSettings):
     # Timezone
     timezone: str = Field(default="Asia/Kolkata")
 
-    # Database
-    db_host: str
-    db_port: int
-    db_name: str
-    db_user: str
-    db_password: str
+    # Database - use DB_URL (e.g. postgresql+asyncpg://user:password@host:port/dbname)
+    DB_URL: str
+
+    @property
+    def database_url(self) -> str:
+        """Alias for DB_URL for compatibility with database module."""
+        return self.DB_URL
 
     # Redis
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     OTP_EXPIRE_SECONDS: int = 300  # 5 minutes
-
-    @property
-    def database_url(self) -> str:
-        return (
-            "postgresql+asyncpg://"
-            f"{self.db_user}:{self.db_password}"
-            f"@{self.db_host}:{self.db_port}/{self.db_name}"
-        )
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     # SMTP Email Configuration (Optional - required only if using email service)
     smtp_host: str = Field(default="smtp.gmail.com")

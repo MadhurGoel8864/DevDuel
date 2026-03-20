@@ -45,6 +45,14 @@ class Contest(Base, TimestampMixin):
         lazy="selectin",
     )
 
+    problems = relationship(
+        "ContestProblem",
+        back_populates="contest",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="ContestProblem.problem_order",
+    )
+
 
 class TeamContest(Base, TimestampMixin):
     __tablename__ = "team_contests"

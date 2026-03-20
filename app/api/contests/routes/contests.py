@@ -12,6 +12,7 @@ from app.api.contests.handlers.contests import (
     get_team_in_contest_handler,
     list_active_contests_handler,
     list_contests_handler,
+    list_created_contests_handler,
     open_registration_handler,
     register_team_handler,
     start_contest_handler,
@@ -24,6 +25,7 @@ router.add_api_route("", create_contest_handler, methods=["POST"], status_code=2
 router.add_api_route("", list_contests_handler, methods=["GET"])
 router.add_api_route("/active", list_active_contests_handler, methods=["GET"])
 router.add_api_route("/me", get_my_contests_handler, methods=["GET"])
+router.add_api_route("/created", list_created_contests_handler, methods=["GET"])
 router.add_api_route("/{contest_id}", get_contest_handler, methods=["GET"])
 
 # Edit contest — PATCH (partial update, creator only, not allowed when ENDED)

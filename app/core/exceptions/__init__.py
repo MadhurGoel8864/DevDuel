@@ -22,6 +22,11 @@ from app.core.exceptions.teams import (CannotModifyTeamDuringActiveContest,
 from app.core.exceptions.users import (UserAlreadyExistsException,
                                        UserNotFoundException,
                                        UserValidationException)
+from app.core.exceptions.problems import (
+    InvalidProblemOrderException,
+    ProblemAlreadyInContestException,
+    ProblemNotFoundException,
+)
 
 __all__ = [
     # Base
@@ -48,4 +53,8 @@ __all__ = [
     "RegistrationClosedException",
     "InvalidContestStateTransition",
     "BadRequestException",
+    # Problem exceptions
+    "ProblemNotFoundException",
+    "ProblemAlreadyInContestException",
+    "InvalidProblemOrderException",
 ]
