@@ -70,3 +70,64 @@ class InvalidContestStateTransition(AppException):
             status_code=409,
             details=details,
         )
+
+
+class MemberAlreadyInContestException(AppException):
+    """
+    Raised when a team tries to register but one or more members are already
+    competing in the same contest via another active team. HTTP 409.
+    First-to-register wins — second team is blocked.
+    """
+
+    def __init__(
+        self,
+        user_ids: Optional[list[str]] = None,
+        contest_id: Optional[str] = None,
+    ):
+        details: dict = {}
+        if user_ids:
+            details["user_ids"] = user_ids
+        if contest_id:
+            details["contest_id"] = contest_id
+        super().__init__(
+            code="MEMBER_ALREADY_IN_CONTEST",
+            message="One or more team members are already competing in this contest via another team",
+            status_code=409,
+            details=details or None,
+        )
+
+
+class MemberAlreadyInActiveContestException(AppException):
+    """
+    Raised when a team tries to register but one or more members are already
+    competing in a different active contest. HTTP 409.
+    Enforces the 'one active contest at a time' rule.
+    """
+
+    def __init__(self, team_id: Optional[str] = None):
+        details = {"team_id": team_id} if team_id else None
+        super().__init__(
+            code="MEMBER_ALREADY_IN_ACTIVE_CONTEST",
+            message=(
+                "One or more team members are currently competing in another active contest. "
+                "A member can only compete in one contest at a time."
+            ),
+            status_code=409,
+            details=details,
+        )
+
+
+class ContestEditNotAllowedException(AppException):
+    """
+    Raised when the creator tries to edit a contest that has already ENDED.
+    HTTP 403.
+    """
+
+    def __init__(self, contest_id: Optional[str] = None):
+        details = {"contest_id": contest_id} if contest_id else None
+        super().__init__(
+            code="CONTEST_EDIT_NOT_ALLOWED",
+            message="Cannot edit a contest that has already ended",
+            status_code=403,
+            details=details,
+        )

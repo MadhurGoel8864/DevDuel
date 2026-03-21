@@ -15,6 +15,7 @@ from app.api.teams.dao.teams import (
 )
 from app.core.enums import ContestStatus, TeamRole
 from app.core.exceptions.teams import (
+    CannotLeaveOwnTeamException,
     CannotModifyTeamDuringActiveContest,
     NotTeamCreatorException,
     TeamAlreadyExistsException,
@@ -22,6 +23,7 @@ from app.core.exceptions.teams import (
     TeamMemberNotFoundException,
     TeamMemberSameRoleException,
     TeamNotFoundException,
+    TeamNotReadyForSwapException,
     TeamRoleTakenException,
 )
 from app.database.models.teams import Team, TeamMember
@@ -73,7 +75,7 @@ class TeamService:
     # ------------------------------------------------------------------
 
     async def _ensure_not_in_active_contest(self, team_id: str) -> None:
-        """Raise CannotModifyTeamDuringActiveContest if the team is in any ACTIVE contest."""
+        """Raise CannotModifyTeamDuringActiveContest if team is in any ACTIVE contest."""
         active_entries = await self._team_contest_dao.get_active_contests_for_team(
             team_id
         )
@@ -82,6 +84,58 @@ class TeamService:
             raise CannotModifyTeamDuringActiveContest(
                 team_id=team_id,
                 contest_id=active_entries[0].contest_id,
+            )
+
+    async def _handle_member_departure(self, team_id: str, member: TeamMember) -> None:
+        """
+        Core logic for a member leaving or being removed.
+
+        If team is in REGISTRATION_OPEN or ACTIVE contest:
+          → delete member row + mark all affected contests inactive
+
+        Otherwise:
+          → delete member row normally
+        """
+        affected_contests = (
+            await self._team_contest_dao.get_open_or_active_contests_for_team(team_id)
+        )
+
+        await self._member_dao.remove(member)
+        logger.info(f"Removed user {member.user_id} from team {team_id}")
+
+        if affected_contests:
+            for tc in affected_contests:
+                await self._team_contest_dao.set_inactive(
+                    team_id=team_id,
+                    contest_id=tc.contest_id,
+                )
+            logger.info(
+                f"Team {team_id} marked inactive for "
+                f"{len(affected_contests)} contest(s) due to member departure"
+            )
+
+    async def _reactivate_if_complete(self, team_id: str) -> None:
+        """
+        Called after a new member joins.
+        If team is now complete (1B + 1C) → re-activate any inactive contest registrations.
+        """
+        status = await self.get_team_status(team_id)
+        if not status.is_ready:
+            return
+
+        inactive_contests = await self._team_contest_dao.get_inactive_contests_for_team(
+            team_id
+        )
+        for tc in inactive_contests:
+            await self._team_contest_dao.set_active(
+                team_id=team_id,
+                contest_id=tc.contest_id,
+            )
+
+        if inactive_contests:
+            logger.info(
+                f"Team {team_id} re-activated for "
+                f"{len(inactive_contests)} contest(s) — roster is complete again"
             )
 
     # ------------------------------------------------------------------
@@ -181,6 +235,8 @@ class TeamService:
 
         member = await self._member_dao.add(team_id=team_id, user_id=user_id, role=role)
         logger.info(f"Added user {user_id} to team {team_id} as {role.value}")
+
+        await self._reactivate_if_complete(team_id)
         return member
 
     async def remove_member(
@@ -215,34 +271,39 @@ class TeamService:
         if not member:
             raise TeamMemberNotFoundException(user_id=user_id, team_id=team_id)
 
-        await self._member_dao.remove(member)
-        logger.info(f"Removed user {user_id} from team {team_id}")
+        await self._handle_member_departure(team_id=team_id, member=member)
+
+    async def leave_team(self, team_id: str, requesting_user_id: str) -> None:
+        team = await self.get_team(team_id)
+
+        if team.created_by == requesting_user_id:
+            raise CannotLeaveOwnTeamException(team_id=team_id)
+
+        member = await self._member_dao.get(team_id=team_id, user_id=requesting_user_id)
+        if not member:
+            raise TeamMemberNotFoundException(
+                user_id=requesting_user_id, team_id=team_id
+            )
+
+        await self._handle_member_departure(team_id=team_id, member=member)
+        logger.info(f"User {requesting_user_id} left team {team_id}")
 
     async def swap_member_roles(
         self,
         team_id: str,
-        member1_id: str,
-        member2_id: str,
         requesting_user_id: str,
     ) -> Team:
         """
-        Swap the roles of two members within a team (creator only).
+        Swap roles of the two team members (creator only).
 
-        Args:
-            team_id: The team both members belong to.
-            member1_id: TeamMember.id of the first member.
-            member2_id: TeamMember.id of the second member.
-            requesting_user_id: Must be the team creator.
-
-        Returns:
-            Updated Team instance with refreshed members.
+        No input needed — team has exactly 2 members (1 BIDDING + 1 CODING).
+        Both members are auto-fetched from the team.
 
         Raises:
-            TeamNotFoundException: If team does not exist.
-            NotTeamCreatorException: If requester is not the team creator.
-            CannotModifyTeamDuringActiveContest: If team is in an ACTIVE contest.
-            TeamMemberNotFoundException: If either member ID is not found in this team.
-            TeamMemberSameRoleException: If both members already have the same role.
+            TeamNotFoundException, NotTeamCreatorException,
+            CannotModifyTeamDuringActiveContest,
+            TeamNotReadyForSwapException: If team doesn't have exactly 2 members.
+            TeamMemberSameRoleException: If both members have the same role (shouldn't happen).
         """
         team = await self.get_team(team_id)
 
@@ -252,14 +313,15 @@ class TeamService:
         # Guard: cannot swap roles during an active contest
         await self._ensure_not_in_active_contest(team_id)
 
-        # Fetch both members by their TeamMember.id and verify they belong to this team
-        member1 = await self._member_dao.get_by_id(member1_id)
-        if not member1 or member1.team_id != team_id:
-            raise TeamMemberNotFoundException(user_id=member1_id, team_id=team_id)
+        # Fetch all members — must be exactly 2
+        members = await self._member_dao.get_by_team(team_id)
+        if len(members) != 2:
+            raise TeamNotReadyForSwapException(
+                team_id=team_id,
+                member_count=len(members),
+            )
 
-        member2 = await self._member_dao.get_by_id(member2_id)
-        if not member2 or member2.team_id != team_id:
-            raise TeamMemberNotFoundException(user_id=member2_id, team_id=team_id)
+        member1, member2 = members[0], members[1]
 
         # No-op guard — roles must be different to swap
         if member1.role == member2.role:
@@ -267,7 +329,7 @@ class TeamService:
 
         await self._member_dao.swap_roles(member1, member2)
         logger.info(
-            f"Swapped roles between members {member1_id} and {member2_id} in team {team_id}"
+            f"Swapped roles between members {member1.user_id} and {member2.user_id} in team {team_id}"
         )
 
         refreshed = await self._team_dao.get_by_id(team_id)
@@ -316,6 +378,11 @@ class TeamService:
             member_count=len(members),
         )
 
+    async def get_team_member_user_ids(self, team_id: str) -> set[str]:
+        await self.get_team(team_id)
+        members = await self._member_dao.get_by_team(team_id)
+        return {m.user_id for m in members}
+
     async def get_user_role_in_team(
         self, team_id: str, user_id: str
     ) -> Optional[TeamRole]:
@@ -334,24 +401,8 @@ class TeamService:
         team_id: str,
         contest_status: ContestStatus,
         already_registered: bool,
+        contest_member_user_ids: set[str] | None = None,
     ) -> tuple[bool, list[str]]:
-        """
-        Pre-check whether a team can join a contest.
-
-        Reuses get_team_status() — no readiness logic is reimplemented here.
-
-        Args:
-            team_id: Team to check.
-            contest_status: Current lifecycle status of the target contest.
-            already_registered: Whether the team is already in the contest.
-
-        Returns:
-            Tuple of (can_join: bool, reasons: list[str]).
-            `reasons` is empty when can_join is True.
-
-        Raises:
-            TeamNotFoundException: If team does not exist.
-        """
         reasons: list[str] = []
 
         # Reuse the single source of truth for team readiness
@@ -366,6 +417,15 @@ class TeamService:
 
         if already_registered:
             reasons.append("Team is already registered for this contest")
+
+        if contest_member_user_ids is not None:
+            team_user_ids = await self.get_team_member_user_ids(team_id)
+            overlapping = team_user_ids & contest_member_user_ids
+            if overlapping:
+                reasons.append(
+                    f"Team member(s) already in this contest via another team: "
+                    f"{', '.join(overlapping)}"
+                )
 
         return (len(reasons) == 0, reasons)
 

@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
+    # ── Team Invite Settings ───────────────────────────────────────────────────
+    INVITE_EXPIRE_SECONDS: int
+    PENDING_JOIN_EXPIRE_SECONDS: int
+
+    # Frontend URLs embedded in invite emails
+    FRONTEND_ACCEPT_INVITE_URL: str
+    FRONTEND_DECLINE_INVITE_URL: str
+    FRONTEND_REGISTER_INVITE_URL: str
+
     class Config:
         env_file = ".env"
 
