@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.enums import Difficulty
-from app.database.models.problems import ContestProblem, Problem
+from app.database.models.problems import BuiltinProblem, ContestProblem, Problem
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +257,53 @@ class ContestProblemDAO:
             raise e
 
 
+class BuiltinProblemDAO:
+    """Data Access Object for BuiltinProblem model."""
+
+    def __init__(self, session: AsyncSession):
+        self._session = session
+
+    async def get_by_id(self, builtin_problem_id: str) -> Optional[BuiltinProblem]:
+        try:
+            result = await self._session.execute(
+                select(BuiltinProblem).where(BuiltinProblem.id == builtin_problem_id)
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(
+                f"Failed to get builtin problem by id {builtin_problem_id}: {e}"
+            )
+            raise e
+
+    async def list_all(
+        self,
+        difficulty: Optional[Difficulty] = None,
+        search: Optional[str] = None,
+        page: int = 1,
+        limit: int = 20,
+    ) -> list[BuiltinProblem]:
+        try:
+            query = select(BuiltinProblem).where(
+                BuiltinProblem.is_active == True  # noqa: E712
+            )
+            if difficulty is not None:
+                query = query.where(BuiltinProblem.difficulty == difficulty)
+            if search:
+                query = query.where(
+                    or_(
+                        BuiltinProblem.title.ilike(f"%{search}%"),
+                        BuiltinProblem.description.ilike(f"%{search}%"),
+                    )
+                )
+            offset = (page - 1) * limit
+            query = query.offset(offset).limit(limit)
+            result = await self._session.execute(query)
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"Failed to list builtin problems: {e}")
+            raise e
+
+
 # ── Dependencies ────────────────────────────────────────────────────────────────
 
 
@@ -268,3 +315,9 @@ async def get_contest_problem_dao(
     session: AsyncSession = Depends(get_db),
 ) -> ContestProblemDAO:
     return ContestProblemDAO(session)
+
+
+async def get_builtin_problem_dao(
+    session: AsyncSession = Depends(get_db),
+) -> BuiltinProblemDAO:
+    return BuiltinProblemDAO(session)
