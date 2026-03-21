@@ -187,7 +187,7 @@ class TeamContestDAO:
             result = await self._session.execute(
                 select(TeamContest).where(
                     TeamContest.contest_id == contest_id,
-                    TeamContest.is_active == True,  
+                    TeamContest.is_active == True,
                 )
             )
             return list(result.scalars().all())
@@ -237,17 +237,17 @@ class TeamContestDAO:
                 .join(Contest, TeamContest.contest_id == Contest.id)
                 .where(
                     TeamContest.team_id == team_id,
-                    Contest.status.in_([
-                        ContestStatus.REGISTRATION_OPEN,
-                        ContestStatus.ACTIVE,
-                    ]),
+                    Contest.status.in_(
+                        [
+                            ContestStatus.REGISTRATION_OPEN,
+                            ContestStatus.ACTIVE,
+                        ]
+                    ),
                 )
             )
             return list(result.scalars().all())
         except Exception as e:
-            logger.error(
-                f"Failed to get open/active contests for team {team_id}: {e}"
-            )
+            logger.error(f"Failed to get open/active contests for team {team_id}: {e}")
             raise e
 
     async def get_inactive_contests_for_team(self, team_id: str) -> list[TeamContest]:
@@ -261,9 +261,7 @@ class TeamContestDAO:
             )
             return list(result.scalars().all())
         except Exception as e:
-            logger.error(
-                f"Failed to get inactive contests for team {team_id}: {e}"
-            )
+            logger.error(f"Failed to get inactive contests for team {team_id}: {e}")
             raise e
 
     async def set_inactive(self, team_id: str, contest_id: str) -> None:
@@ -324,7 +322,7 @@ class TeamContestDAO:
         try:
             stmt = exists().where(
                 TeamContest.team_id != team_id,
-                TeamContest.is_active == True,  
+                TeamContest.is_active == True,
                 TeamMember.team_id == TeamContest.team_id,
                 Contest.id == TeamContest.contest_id,
                 Contest.status == ContestStatus.ACTIVE,
@@ -342,9 +340,7 @@ class TeamContestDAO:
         """Return all team_ids registered for a contest."""
         try:
             result = await self._session.execute(
-                select(TeamContest.team_id).where(
-                    TeamContest.contest_id == contest_id
-                )
+                select(TeamContest.team_id).where(TeamContest.contest_id == contest_id)
             )
             return list(result.scalars().all())
         except Exception as e:

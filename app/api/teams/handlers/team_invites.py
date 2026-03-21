@@ -6,16 +6,22 @@ from fastapi import BackgroundTasks, Body, Depends, Path, Query
 
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
-from app.api.teams.schemas.team_invites import (InviteAcceptRequest,
-                                                InviteDeclineRequest,
-                                                InviteMemberRequest,
-                                                InviteResponse,
-                                                InviteValidateResponse)
-from app.api.teams.services.team_invites import (TeamInviteService,
-                                                 get_team_invite_service)
+from app.api.teams.schemas.team_invites import (
+    InviteAcceptRequest,
+    InviteDeclineRequest,
+    InviteMemberRequest,
+    InviteResponse,
+    InviteValidateResponse,
+)
+from app.api.teams.services.team_invites import (
+    TeamInviteService,
+    get_team_invite_service,
+)
 from app.services.email import email_service
 from app.services.email.templates.team_invite import (
-    team_invite_new_user_template, team_invite_registered_template)
+    team_invite_new_user_template,
+    team_invite_registered_template,
+)
 
 logger = logging.getLogger(__name__)
 

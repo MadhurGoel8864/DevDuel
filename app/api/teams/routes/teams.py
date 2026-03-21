@@ -3,21 +3,25 @@
 from fastapi import APIRouter
 
 from app.api.common.responses import MessageResponse
-from app.api.teams.handlers.team_invites import (accept_invite_handler,
-                                                 decline_invite_handler,
-                                                 send_invite_handler,
-                                                 validate_invite_handler)
-from app.api.teams.handlers.teams import (add_member_handler,
-                                          can_join_contest_handler,
-                                          create_team_handler,
-                                          delete_team_handler,
-                                          get_my_role_handler,
-                                          get_my_teams_handler,
-                                          get_team_handler,
-                                          get_team_status_handler,
-                                          leave_team_handler,
-                                          remove_member_handler,
-                                          swap_roles_handler)
+from app.api.teams.handlers.team_invites import (
+    accept_invite_handler,
+    decline_invite_handler,
+    send_invite_handler,
+    validate_invite_handler,
+)
+from app.api.teams.handlers.teams import (
+    add_member_handler,
+    can_join_contest_handler,
+    create_team_handler,
+    delete_team_handler,
+    get_my_role_handler,
+    get_my_teams_handler,
+    get_team_handler,
+    get_team_status_handler,
+    leave_team_handler,
+    remove_member_handler,
+    swap_roles_handler,
+)
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 

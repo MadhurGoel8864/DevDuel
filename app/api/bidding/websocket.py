@@ -161,6 +161,7 @@ async def bidding_ws_endpoint(
                         )
                     )
                     continue
+
                 try:
                     assignment = await bidding_service.finish_auction(
                         auction_id=auction_id

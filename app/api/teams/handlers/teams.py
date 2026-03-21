@@ -7,17 +7,21 @@ from fastapi import Body, Depends, Path
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
 from app.api.common.responses import MessageResponse
-from app.api.contests.services.contests import (ContestService,
-                                                get_contest_service)
-from app.api.teams.schemas.teams import (AddMemberRequest, CanJoinResponse,
-                                         CanJoinResponseData,
-                                         TeamCreateRequest, TeamListResponse,
-                                         TeamResponse, TeamResponseData,
-                                         TeamRoleResponse,
-                                         TeamRoleResponseData,
-                                         TeamStatusResponse,
-                                         TeamStatusResponseData,
-                                         TeamSummaryData)
+from app.api.contests.services.contests import ContestService, get_contest_service
+from app.api.teams.schemas.teams import (
+    AddMemberRequest,
+    CanJoinResponse,
+    CanJoinResponseData,
+    TeamCreateRequest,
+    TeamListResponse,
+    TeamResponse,
+    TeamResponseData,
+    TeamRoleResponse,
+    TeamRoleResponseData,
+    TeamStatusResponse,
+    TeamStatusResponseData,
+    TeamSummaryData,
+)
 from app.api.teams.services.teams import TeamService, get_team_service
 
 logger = logging.getLogger(__name__)
