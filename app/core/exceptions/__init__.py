@@ -9,8 +9,10 @@ from app.core.exceptions.base import AppException
 from app.core.exceptions.common import BadRequestException
 from app.core.exceptions.contests import (
     ContestAlreadyRegisteredException,
+    ContestEditNotAllowedException,
     ContestNotFoundException,
     InvalidContestStateTransition,
+    MemberAlreadyInActiveContestException,
     RegistrationClosedException,
 )
 from app.core.exceptions.problems import (
@@ -25,6 +27,7 @@ from app.core.exceptions.teams import (
     TeamMemberAlreadyExistsException,
     TeamMemberNotFoundException,
     TeamNotFoundException,
+    TeamNotReadyForSwapException,
     TeamRoleTakenException,
 )
 from app.core.exceptions.users import (

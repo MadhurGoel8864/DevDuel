@@ -2,6 +2,8 @@
 Authentication schemas for user authentication and authorization.
 """
 
+from typing import Optional
+
 from pydantic import BaseModel, EmailStr
 
 from app.core.enums import UserRole
@@ -331,4 +333,24 @@ class LogoutResult(BaseModel):
     class Config:
         """Pydantic configuration."""
 
+
+class RegisterRequest(BaseModel):
+    """Request schema for user registration."""
+
+    email: EmailStr
+    password: str
+    full_name: str
+    invite_token: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RegisterResponse(BaseModel):
+    """Response schema for successful registration."""
+
+    message: str
+    email: str
+
+    class Config:
         from_attributes = True

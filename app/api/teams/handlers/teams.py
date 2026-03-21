@@ -6,12 +6,12 @@ from fastapi import Body, Depends, Path
 
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
+from app.api.common.responses import MessageResponse
 from app.api.contests.services.contests import ContestService, get_contest_service
 from app.api.teams.schemas.teams import (
     AddMemberRequest,
     CanJoinResponse,
     CanJoinResponseData,
-    SwapRolesRequest,
     TeamCreateRequest,
     TeamListResponse,
     TeamResponse,
@@ -96,18 +96,16 @@ async def remove_member_handler(
 
 async def swap_roles_handler(
     team_id: str = Path(..., description="Team ID"),
-    request: SwapRolesRequest = Body(...),
     current_user: UserWithPermissions = Depends(get_current_user),
     team_service: TeamService = Depends(get_team_service),
 ) -> TeamResponse:
-    """Swap roles between two team members. Only the team creator can perform this action.
-    member1_id and member2_id must be TeamMember IDs (not User IDs) and must belong
-    to this team. Both members must currently have different roles.
+    """
+    Swap roles between the two team members. Creator only.
+    No request body needed — team has exactly 2 members (1 BIDDING + 1 CODING).
+    Both members are auto-fetched and their roles are swapped.
     """
     team = await team_service.swap_member_roles(
         team_id=team_id,
-        member1_id=request.data.member1_id,
-        member2_id=request.data.member2_id,
         requesting_user_id=current_user.user_id,
     )
     return TeamResponse(data=TeamResponseData.model_validate(team))
@@ -134,9 +132,7 @@ async def get_team_status_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     team_service: TeamService = Depends(get_team_service),
 ) -> TeamStatusResponse:
-    """
-    Return whether a team is contest-ready (has both BIDDING and CODING filled).
-    """
+    """Return whether a team is contest-ready (has both BIDDING and CODING filled)."""
     status = await team_service.get_team_status(team_id=team_id)
     return TeamStatusResponse(
         data=TeamStatusResponseData(
@@ -187,11 +183,14 @@ async def can_join_contest_handler(
     existing = await contest_service.get_team_in_contest_safe(
         contest_id=contest_id, team_id=team_id
     )
-
+    contest_member_user_ids = await contest_service.get_contest_member_user_ids(
+        contest_id=contest_id
+    )
     can_join, reasons = await team_service.can_join_contest(
         team_id=team_id,
         contest_status=contest.status,
         already_registered=existing is not None,
+        contest_member_user_ids=contest_member_user_ids,
     )
     return CanJoinResponse(
         data=CanJoinResponseData(
@@ -201,3 +200,20 @@ async def can_join_contest_handler(
             reasons=reasons,
         )
     )
+
+
+async def leave_team_handler(
+    team_id: str = Path(..., description="Team ID to leave"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    team_service: TeamService = Depends(get_team_service),
+) -> MessageResponse:
+    """
+    Leave a team voluntarily.
+    Creator cannot use this — they must delete the team instead.
+    If team is in an open/active contest, it is marked inactive.
+    """
+    await team_service.leave_team(
+        team_id=team_id,
+        requesting_user_id=current_user.user_id,
+    )
+    return MessageResponse(message="You have left the team.")

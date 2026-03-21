@@ -125,3 +125,84 @@ class CannotModifyTeamDuringActiveContest(AppException):
             status_code=409,
             details=details,
         )
+
+
+# ── Invite Exceptions ──────────────────────────────────────────────────────────
+
+
+class TeamInviteInvalidException(AppException):
+    """Token not found in Redis — expired or never existed. HTTP 404."""
+
+    def __init__(self):
+        super().__init__(
+            code="INVITE_INVALID",
+            message="Invite token is invalid or has expired. Please ask for a new invite.",
+            status_code=404,
+        )
+
+
+class TeamInviteEmailMismatchException(AppException):
+    """Authenticated user's email doesn't match the invite email. HTTP 403."""
+
+    def __init__(self):
+        super().__init__(
+            code="INVITE_EMAIL_MISMATCH",
+            message="This invite was sent to a different email address.",
+            status_code=403,
+        )
+
+
+class TeamInviteAlreadyPendingException(AppException):
+    """A pending invite already exists for this email+team combo. HTTP 409."""
+
+    def __init__(self, email: Optional[str] = None):
+        super().__init__(
+            code="INVITE_ALREADY_PENDING",
+            message=(
+                f"A pending invite already exists for {email}"
+                if email
+                else "A pending invite already exists for this email"
+            ),
+            status_code=409,
+            details={"email": email} if email else None,
+        )
+
+
+"""Team exceptions — add CannotLeaveOwnTeamException"""
+
+
+class CannotLeaveOwnTeamException(AppException):
+    """Raised when the team creator tries to use the leave endpoint."""
+
+    def __init__(self, team_id: str):
+        super().__init__(
+            status_code=403,
+            code="CANNOT_LEAVE_OWN_TEAM",
+            message=(
+                "Team creators cannot leave their own team. " "Delete the team instead."
+            ),
+            details={"team_id": team_id},
+        )
+
+
+class TeamNotReadyForSwapException(AppException):
+    """
+    Raised when swap-roles is called but team doesn't have exactly 2 members.
+    HTTP 400.
+    """
+
+    def __init__(self, team_id: str, member_count: int):
+        super().__init__(
+            code="TEAM_NOT_READY_FOR_SWAP",
+            message=(
+                f"Team must have exactly 2 members to swap roles, "
+                f"but has {member_count}."
+            ),
+            status_code=400,
+            details={"team_id": team_id, "member_count": member_count},
+        )
+
+
+# NOTE: TeamInviteExpiredException and TeamInviteConsumedException from the DB
+# approach are no longer needed — Redis returns None for both expired and
+# consumed tokens, and TeamInviteInvalidException covers both cases.

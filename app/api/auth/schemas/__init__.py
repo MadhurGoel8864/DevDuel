@@ -14,6 +14,8 @@ from app.api.auth.schemas.auth import (
     ProtectedRouteResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
+    RegisterRequest,
+    RegisterResponse,
     ResetPasswordRequest,
     SendOTPRequest,
     SendOTPResponse,
