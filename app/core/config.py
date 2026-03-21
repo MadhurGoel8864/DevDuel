@@ -63,8 +63,8 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str
 
     # ── Team Invite Settings ───────────────────────────────────────────────────
-    INVITE_EXPIRE_SECONDS: int
-    PENDING_JOIN_EXPIRE_SECONDS: int
+    INVITE_EXPIRE_SECONDS: int = 259200  # 3 days
+    PENDING_JOIN_EXPIRE_SECONDS: int = 86400  # 1 day
 
     # Frontend URLs embedded in invite emails
     FRONTEND_ACCEPT_INVITE_URL: str
