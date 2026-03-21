@@ -63,4 +63,4 @@ n ?= 1
 
 .PHONY: run
 run:
-	uvicorn app.main:app --reload --host 0.0.0.0 --port 8150
+	poetry run uvicorn app.main:app --reload
