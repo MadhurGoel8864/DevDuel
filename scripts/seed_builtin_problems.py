@@ -3,16 +3,13 @@
 Run once after applying the 0015 migration:
     python scripts/seed_builtin_problems.py
 
-The script is idempotent – it skips rows whose slugs already exist.
+The script is idempotent - it skips rows whose slugs already exist.
 """
 
 import asyncio
 import re
 import sys
 from pathlib import Path
-
-# Allow running from the project root without installing the package.
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -21,6 +18,9 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings  # noqa: E402
 from app.database.models.problems import BuiltinProblem  # noqa: E402
 from app.database.utils import generate_uuid  # noqa: E402
+
+# Allow running from the project root without installing the package.
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 engine = create_async_engine(settings.DB_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -93,8 +93,8 @@ BUILTIN_PROBLEMS = [
             "2. Open brackets must be closed in the correct order.\n"
             "3. Every close bracket has a corresponding open bracket of the same type.\n\n"
             "### Example\n\n"
-            "**Input:** `s = \"()[]{}\"` → **Output:** `true`  \n"
-            "**Input:** `s = \"(]\"` → **Output:** `false`"
+            '**Input:** `s = "()[]{}"` → **Output:** `true`  \n'
+            '**Input:** `s = "(]"` → **Output:** `false`'
         ),
     },
     {
@@ -127,7 +127,7 @@ BUILTIN_PROBLEMS = [
             "Given a string `s`, find the length of the **longest substring** without "
             "repeating characters.\n\n"
             "### Example\n\n"
-            "**Input:** `s = \"abcabcbb\"` → **Output:** `3` (the answer is `\"abc\"`)\n\n"
+            '**Input:** `s = "abcabcbb"` → **Output:** `3` (the answer is `"abc"`)\n\n'
             "### Constraints\n"
             "- `0 <= s.length <= 5 * 10^4`\n"
             "- `s` consists of English letters, digits, symbols and spaces."
@@ -259,8 +259,8 @@ BUILTIN_PROBLEMS = [
             "Return the **number of words** in the shortest transformation sequence from "
             "`beginWord` to `endWord`, or `0` if no such sequence exists.\n\n"
             "### Example\n\n"
-            "**Input:** `beginWord = \"hit\"`, `endWord = \"cog\"`, "
-            "`wordList = [\"hot\",\"dot\",\"dog\",\"lot\",\"log\",\"cog\"]`  \n"
+            '**Input:** `beginWord = "hit"`, `endWord = "cog"`, '
+            '`wordList = ["hot","dot","dog","lot","log","cog"]`  \n'
             "**Output:** `5` (hit → hot → dot → dog → cog)\n\n"
             "### Constraints\n"
             "- `1 <= beginWord.length <= 10`\n"

@@ -50,6 +50,7 @@ class InvalidProblemOrderException(AppException):
             status_code=400,
         )
 
+
 class BuiltinProblemNotFoundException(AppException):
     """Raised when a built-in problem is not found. HTTP 404."""
 
@@ -58,7 +59,9 @@ class BuiltinProblemNotFoundException(AppException):
         builtin_problem_id: Optional[str] = None,
         message: Optional[str] = None,
     ):
-        details = {"builtin_problem_id": builtin_problem_id} if builtin_problem_id else None
+        details = (
+            {"builtin_problem_id": builtin_problem_id} if builtin_problem_id else None
+        )
         super().__init__(
             code="BUILTIN_PROBLEM_NOT_FOUND",
             message=message

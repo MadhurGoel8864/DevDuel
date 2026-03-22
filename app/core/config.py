@@ -2,6 +2,10 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+FRONTEND_BASE_URL = (
+    "http://localhost:5173"  # Used for constructing frontend URLs in emails
+)
+
 
 class Settings(BaseSettings):
     # App
@@ -67,9 +71,20 @@ class Settings(BaseSettings):
     PENDING_JOIN_EXPIRE_SECONDS: int
 
     # Frontend URLs embedded in invite emails
-    FRONTEND_ACCEPT_INVITE_URL: str
-    FRONTEND_DECLINE_INVITE_URL: str
-    FRONTEND_REGISTER_INVITE_URL: str
+    FRONTEND_ACCEPT_INVITE_URL: str = Field(
+        default=f"{FRONTEND_BASE_URL}/api/teams/invite/accept"
+    )
+    FRONTEND_DECLINE_INVITE_URL: str = Field(
+        default=f"{FRONTEND_BASE_URL}/api/teams/invite/decline"
+    )
+    FRONTEND_REGISTER_INVITE_URL: str = Field(
+        default=f"{FRONTEND_BASE_URL}/api/auth/register"
+    )
+
+    # Frontend URL for password reset page (token appended as ?token=...)
+    FRONTEND_RESET_PASSWORD_URL: str = Field(
+        default=f"{FRONTEND_BASE_URL}/reset-password"
+    )
 
     class Config:
         env_file = ".env"

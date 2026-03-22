@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr
 
 from app.core.responses import APIResponse
+from app.core.security.password import PasswordStr
 from app.core.timezone_utils import ISTDatetimeMixin
 
 
@@ -34,7 +35,7 @@ class UserCreateData(BaseSchema):
 
     email: EmailStr
     full_name: str
-    password: str
+    password: PasswordStr
 
 
 class UserCreateRequest(BaseRequestSchema):

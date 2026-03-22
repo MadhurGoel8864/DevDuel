@@ -5,12 +5,12 @@ This module provides the email template for password reset requests.
 """
 
 
-def password_reset_email_template(reset_token: str) -> tuple[str, str]:
+def password_reset_email_template(reset_link: str) -> tuple[str, str]:
     """
     Generate password reset email template.
 
     Args:
-        reset_token: The password reset token to include in the email
+        reset_link: Full frontend URL with the reset token as a query parameter
 
     Returns:
         tuple[str, str]: (subject, html_body)
@@ -47,23 +47,24 @@ def password_reset_email_template(reset_token: str) -> tuple[str, str]:
                 margin: 0;
                 font-size: 24px;
             }}
-            .token-box {{
-                background-color: #ffffff;
-                border: 2px solid #e74c3c;
-                border-radius: 8px;
-                padding: 20px;
+            .btn-container {{
                 text-align: center;
                 margin: 30px 0;
             }}
-            .token-code {{
-                font-size: 18px;
+            .btn {{
+                display: inline-block;
+                padding: 14px 32px;
+                background-color: #e74c3c;
+                color: #ffffff !important;
+                text-decoration: none;
+                border-radius: 6px;
+                font-size: 16px;
                 font-weight: bold;
-                color: #e74c3c;
+            }}
+            .fallback-link {{
                 word-break: break-all;
-                margin: 10px 0;
-                padding: 10px;
-                background-color: #fef5f5;
-                border-radius: 4px;
+                color: #e74c3c;
+                font-size: 13px;
             }}
             .warning {{
                 background-color: #fff3cd;
@@ -77,13 +78,6 @@ def password_reset_email_template(reset_token: str) -> tuple[str, str]:
                 color: #856404;
                 margin-bottom: 5px;
             }}
-            .info {{
-                background-color: #d1ecf1;
-                border-left: 4px solid #17a2b8;
-                padding: 15px;
-                margin: 20px 0;
-                border-radius: 4px;
-            }}
             .footer {{
                 text-align: center;
                 margin-top: 30px;
@@ -95,40 +89,34 @@ def password_reset_email_template(reset_token: str) -> tuple[str, str]:
     <body>
         <div class="container">
             <div class="header">
-                <h1>🔑 Password Reset Request</h1>
+                <h1>Password Reset Request</h1>
             </div>
 
             <p>Hello,</p>
 
-            <p>We received a request to reset your password. Use the token below to reset your password:</p>
+            <p>We received a request to reset your DevDuel password. Click the button below to choose a new password:</p>
 
-            <div class="token-box">
-                <div style="color: #7f8c8d; font-size: 14px; margin-bottom: 10px;">YOUR RESET TOKEN</div>
-                <div class="token-code">{reset_token}</div>
-                <div style="color: #7f8c8d; font-size: 14px; margin-top: 10px;">Valid for 15 minutes</div>
+            <div class="btn-container">
+                <a href="{reset_link}" class="btn">Reset My Password</a>
             </div>
 
-            <div class="info">
-                <strong>How to reset your password:</strong>
-                <ol style="margin: 10px 0;">
-                    <li>Copy the reset token above</li>
-                    <li>Go to the password reset page</li>
-                    <li>Enter this token and your new password</li>
-                    <li>Submit to complete the reset</li>
-                </ol>
-            </div>
+            <p style="text-align: center; color: #7f8c8d; font-size: 13px;">
+                This link expires in <strong>15 minutes</strong>.
+            </p>
+
+            <p style="font-size: 13px; color: #555;">
+                If the button above doesn't work, copy and paste this link into your browser:
+            </p>
+            <p class="fallback-link">{reset_link}</p>
 
             <div class="warning">
-                <div class="warning-title">⚠️ Security Warning</div>
+                <div class="warning-title">Security Notice</div>
                 <div>
-                    Never share this reset token with anyone. Our team will never ask for your reset token.
-                    If you didn't request a password reset,
-                    please ignore this email and your password will remain unchanged.
+                    If you didn't request a password reset, you can safely ignore this email —
+                    your password will remain unchanged.
+                    Never share this link with anyone.
                 </div>
             </div>
-
-            <p>This reset token will expire in <strong>15 minutes</strong>.
-            If you didn't request a password reset, you can safely ignore this email.</p>
 
             <div class="footer">
                 <p>This is an automated message, please do not reply to this email.</p>
