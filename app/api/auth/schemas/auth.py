@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr
 
 from app.core.enums import UserRole
+from app.core.security.password import PasswordStr
 
 
 class UserWithPermissions(BaseModel):
@@ -298,7 +299,7 @@ class ResetPasswordRequest(BaseModel):
     """
 
     token: str
-    new_password: str
+    new_password: PasswordStr
 
     class Config:
         """Pydantic configuration."""
@@ -338,7 +339,7 @@ class RegisterRequest(BaseModel):
     """Request schema for user registration."""
 
     email: EmailStr
-    password: str
+    password: PasswordStr
     full_name: str
     invite_token: Optional[str] = None
 
