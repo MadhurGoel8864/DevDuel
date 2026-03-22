@@ -41,6 +41,7 @@ from app.api.teams.services.team_invites import (
 )
 from app.api.users.schemas.users import UserCreateData
 from app.api.users.services.users import UserService, get_user_service
+from app.core.config import settings
 from app.core.enums import PlatformType
 from app.services.email import email_service
 from app.services.email.templates import (
@@ -358,7 +359,7 @@ async def resend_otp_handler(
         )
 
 
-def send_password_reset_email_task(email: str, reset_token: str) -> None:
+def send_password_reset_email_task(email: str, reset_link: str) -> None:
     """
     Background task to send password reset email.
 
@@ -366,11 +367,10 @@ def send_password_reset_email_task(email: str, reset_token: str) -> None:
 
     Args:
         email: Recipient email address
-        reset_token: The password reset token to send
+        reset_link: Full frontend URL with reset token as query param
     """
     try:
-
-        subject, html_body = password_reset_email_template(reset_token)
+        subject, html_body = password_reset_email_template(reset_link)
         email_service.send_email(
             to_email=email,
             subject=subject,
@@ -389,7 +389,8 @@ async def forgot_password_handler(
     """
     Initiate password reset process.
 
-    Validates user, generates reset token, stores in Redis, and sends email.
+    Validates user, generates reset token, stores in Redis, and sends email
+    with a clickable reset link pointing to the frontend.
 
     Args:
         request: Email address for password reset
@@ -406,12 +407,14 @@ async def forgot_password_handler(
     # Delegate to service layer
     result = await auth_service.request_password_reset(request.email)
 
+    # Build the full reset link that the frontend will handle
+    reset_link = f"{settings.FRONTEND_RESET_PASSWORD_URL}?token={result.reset_token}"
+
     # Add email sending to background tasks (non-blocking)
-    # TODO: Make the password reset to a reset link (into the frontend)
     background_tasks.add_task(
         send_password_reset_email_task,
         result.email,
-        result.reset_token,
+        reset_link,
     )
 
     return ForgotPasswordResponse(

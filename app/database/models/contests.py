@@ -21,7 +21,7 @@ class Contest(Base, TimestampMixin):
 
     id = mapped_column(String(36), primary_key=True, default=generate_uuid)
     name = mapped_column(String(100), nullable=False)
-    description = mapped_column(String(255), nullable=True)
+    description = mapped_column(String(1000), nullable=True)
 
     start_time = mapped_column(DateTime(timezone=True), nullable=False)
     end_time = mapped_column(DateTime(timezone=True), nullable=False)

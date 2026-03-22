@@ -187,7 +187,7 @@ class TeamContestDAO:
             result = await self._session.execute(
                 select(TeamContest).where(
                     TeamContest.contest_id == contest_id,
-                    TeamContest.is_active == True,
+                    TeamContest.is_active,
                 )
             )
             return list(result.scalars().all())
@@ -322,7 +322,7 @@ class TeamContestDAO:
         try:
             stmt = exists().where(
                 TeamContest.team_id != team_id,
-                TeamContest.is_active == True,
+                TeamContest.is_active,
                 TeamMember.team_id == TeamContest.team_id,
                 Contest.id == TeamContest.contest_id,
                 Contest.status == ContestStatus.ACTIVE,
@@ -346,6 +346,21 @@ class TeamContestDAO:
         except Exception as e:
             logger.error(
                 f"Failed to get registered team ids for contest {contest_id}: {e}"
+            )
+            raise e
+
+    async def get_contest_user_ids(self, contest_id: str) -> set[str]:
+        """Return all user_ids across all teams registered for a contest."""
+        try:
+            result = await self._session.execute(
+                select(TeamMember.user_id)
+                .join(TeamContest, TeamMember.team_id == TeamContest.team_id)
+                .where(TeamContest.contest_id == contest_id)
+            )
+            return set(result.scalars().all())
+        except Exception as e:
+            logger.error(
+                f"Failed to get contest user ids for contest {contest_id}: {e}"
             )
             raise e
 
