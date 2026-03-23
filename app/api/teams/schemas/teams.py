@@ -2,10 +2,10 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.core.enums import TeamRole
-from app.core.responses import APIResponse
+from app.core.responses import APIResponse, PaginatedResponse
 from app.core.timezone_utils import ISTDatetimeMixin
 
 
@@ -64,6 +64,20 @@ class TeamSummaryData(BaseSchema, ISTDatetimeMixin):
     name: str
     created_by: str
     created_at: datetime
+    member_count: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def compute_member_count(cls, data):
+        if hasattr(data, "members"):
+            return {
+                "id": data.id,
+                "name": data.name,
+                "created_by": data.created_by,
+                "created_at": data.created_at,
+                "member_count": len(data.members),
+            }
+        return data
 
 
 # ── Status / Role / Can-Join Schemas ──────────────────────────────────────────
@@ -95,6 +109,7 @@ class CanJoinResponseData(BaseSchema):
 
 TeamResponse = APIResponse[TeamResponseData]
 TeamListResponse = APIResponse[list[TeamSummaryData]]
+TeamPaginatedListResponse = PaginatedResponse[TeamSummaryData]
 TeamStatusResponse = APIResponse[TeamStatusResponseData]
 TeamRoleResponse = APIResponse[TeamRoleResponseData]
 CanJoinResponse = APIResponse[CanJoinResponseData]

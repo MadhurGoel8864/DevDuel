@@ -72,13 +72,13 @@ class Settings(BaseSettings):
 
     # Frontend URLs embedded in invite emails
     FRONTEND_ACCEPT_INVITE_URL: str = Field(
-        default=f"{FRONTEND_BASE_URL}/api/teams/invite/accept"
+        default=f"{FRONTEND_BASE_URL}/teams/invite"
     )
     FRONTEND_DECLINE_INVITE_URL: str = Field(
-        default=f"{FRONTEND_BASE_URL}/api/teams/invite/decline"
+        default=f"{FRONTEND_BASE_URL}/teams/invite"
     )
     FRONTEND_REGISTER_INVITE_URL: str = Field(
-        default=f"{FRONTEND_BASE_URL}/api/auth/register"
+        default=f"{FRONTEND_BASE_URL}/register"
     )
 
     # Frontend URL for password reset page (token appended as ?token=...)
