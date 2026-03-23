@@ -4,7 +4,7 @@ import logging
 
 from fastapi import BackgroundTasks, Body, Depends, Path, Query
 
-from app.api.auth.dependencies import get_current_user
+from app.api.auth.dependencies import get_current_user, require_organizer
 from app.api.auth.schemas import UserWithPermissions
 from app.api.contests.schemas.contests import (
     ContestCreateRequest,
@@ -55,10 +55,10 @@ def _send_contest_update_email(
 
 async def create_contest_handler(
     request: ContestCreateRequest = Body(...),
-    current_user: UserWithPermissions = Depends(get_current_user),
+    current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
 ) -> ContestResponse:
-    """Create a new contest. Starts in DRAFT status."""
+    """Create a new contest. Starts in DRAFT status. Requires organizer."""
     contest = await contest_service.create_contest(
         name=request.data.name,
         description=request.data.description,
@@ -74,11 +74,11 @@ async def edit_contest_handler(
     contest_id: str = Path(..., description="Contest ID"),
     request: ContestEditRequest = Body(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    current_user: UserWithPermissions = Depends(get_current_user),
+    current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
 ) -> ContestResponse:
     """
-    Partially update a contest (creator only).
+    Partially update a contest (organizer/creator only).
 
     Allowed in any status except ENDED.
     All fields optional — only provided fields are updated.
@@ -261,11 +261,11 @@ async def get_contest_leaderboard_handler(
 
 async def open_registration_handler(
     contest_id: str = Path(..., description="Contest ID"),
-    current_user: UserWithPermissions = Depends(get_current_user),
+    current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
 ) -> ContestResponse:
     """Open registration for a contest (DRAFT → REGISTRATION_OPEN).
-    Only the contest creator may call this.
+    Only the contest creator (organizer) may call this.
     """
     contest = await contest_service.update_contest_status(
         contest_id=contest_id,
@@ -277,11 +277,11 @@ async def open_registration_handler(
 
 async def start_contest_handler(
     contest_id: str = Path(..., description="Contest ID"),
-    current_user: UserWithPermissions = Depends(get_current_user),
+    current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
 ) -> ContestResponse:
     """Start a contest (REGISTRATION_OPEN → ACTIVE).
-    Only the contest creator may call this.
+    Only the contest creator (organizer) may call this.
     """
     contest = await contest_service.update_contest_status(
         contest_id=contest_id,
@@ -293,11 +293,11 @@ async def start_contest_handler(
 
 async def end_contest_handler(
     contest_id: str = Path(..., description="Contest ID"),
-    current_user: UserWithPermissions = Depends(get_current_user),
+    current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
 ) -> ContestResponse:
     """End a contest (ACTIVE → ENDED).
-    Only the contest creator may call this.
+    Only the contest creator (organizer) may call this.
     """
     contest = await contest_service.update_contest_status(
         contest_id=contest_id,

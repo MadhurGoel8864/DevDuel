@@ -25,6 +25,7 @@ class UserWithPermissions(BaseModel):
     permissions: list[str]
     is_active: bool
     is_verified: bool
+    is_organizer: bool = False
     profile_img_url: str | None = None
 
     class Config:
@@ -47,6 +48,7 @@ class UserProfileResponse(BaseModel):
     permissions: list[str]
     is_active: bool
     is_verified: bool
+    is_organizer: bool = False
     profile_img_url: str | None = None
     last_login_at: str | None = None
 

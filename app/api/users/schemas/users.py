@@ -58,6 +58,7 @@ class UserBaseData(BaseSchema):
     role: str
     is_active: bool
     is_verified: bool
+    is_organizer: bool = False
     profile_img_url: str | None = None
 
 
@@ -90,8 +91,36 @@ class UserListResponseData(UserBaseData, ISTDatetimeMixin):
     updated_at: datetime
 
 
+class UserUpdateData(BaseSchema):
+    """
+    Data schema for updating a user's profile.
+    Both fields are optional; only provided fields are updated.
+    """
+
+    full_name: str | None = None
+    username: str | None = None
+
+
+class UserUpdateRequest(BaseRequestSchema):
+    """
+    Request schema for updating a user's profile.
+    """
+
+    data: UserUpdateData
+
+
+class UserUpdateResponseData(UserBaseData, ISTDatetimeMixin):
+    """
+    Response data after updating a user's profile.
+    """
+
+    created_at: datetime
+    updated_at: datetime
+
+
 # Final response aliases
 UserCreateResponse = APIResponse[UserCreateResponseData]
 UserGetResponse = APIResponse[UserGetResponseData]
+UserUpdateResponse = APIResponse[UserUpdateResponseData]
 # Remove
 UserListResponse = APIResponse[list[UserListResponseData]]

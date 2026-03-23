@@ -136,10 +136,11 @@ async def get_current_user(
             user_id=user.id,
             email=user.email,
             username=user.username,
-            role=UserRole.USER,  # Default role
-            permissions=[],  # Empty permissions for now
+            role=UserRole.USER,
+            permissions=[],
             is_active=user.is_active,
             is_verified=user.is_verified,
+            is_organizer=user.is_organizer,
         )
 
     except TokenExpiredError:
@@ -161,6 +162,22 @@ async def get_current_user(
     except Exception:
         # Catch any other unexpected errors without leaking details
         raise
+
+
+async def require_organizer(
+    current_user: UserWithPermissions = Depends(get_current_user),
+) -> UserWithPermissions:
+    """
+    Dependency that ensures the authenticated user is an organizer.
+
+    Raises:
+        ForbiddenException: If the user does not have is_organizer=True.
+    """
+    if not current_user.is_organizer:
+        raise ForbiddenException(
+            message="Only organizers are allowed to perform this action"
+        )
+    return current_user
 
 
 async def get_logout_tokens(
