@@ -307,6 +307,10 @@ class TeamInviteService:
             # Normal OTP verification — no invite involved
             return
 
+        # Decode bytes → str if Redis client is not configured with decode_responses=True
+        if isinstance(token, bytes):
+            token = token.decode()
+
         # Fetch invite data — may have expired in the 24h window
         raw = await self._redis.get(_invite_key(token))
         if not raw:

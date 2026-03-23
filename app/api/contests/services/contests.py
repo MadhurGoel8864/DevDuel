@@ -114,17 +114,34 @@ class ContestService:
             raise ContestNotFoundException(contest_id=contest_id)
         return contest
 
-    async def list_contests(self) -> list[Contest]:
-        """Return all contests."""
-        return await self._contest_dao.get_all()
+    async def list_contests(
+        self, page: int = 1, limit: int = 20
+    ) -> tuple[list[Contest], int]:
+        """Return paginated contests and total count."""
+        offset = (page - 1) * limit
+        contests = await self._contest_dao.get_all_paginated(limit=limit, offset=offset)
+        total = await self._contest_dao.count_all()
+        return contests, total
 
-    async def list_active_contests(self) -> list[Contest]:
-        """Return only contests with ACTIVE status."""
-        return await self._contest_dao.get_active()
+    async def list_active_contests(
+        self, page: int = 1, limit: int = 20
+    ) -> tuple[list[Contest], int]:
+        """Return paginated contests with ACTIVE status and total count."""
+        offset = (page - 1) * limit
+        contests = await self._contest_dao.get_active_paginated(limit=limit, offset=offset)
+        total = await self._contest_dao.count_active()
+        return contests, total
 
-    async def list_created_contests(self, user_id: str) -> list[Contest]:
-        """Return all contests created by the given user."""
-        return await self._contest_dao.get_created_by(user_id)
+    async def list_created_contests(
+        self, user_id: str, page: int = 1, limit: int = 20
+    ) -> tuple[list[Contest], int]:
+        """Return paginated contests created by the given user and total count."""
+        offset = (page - 1) * limit
+        contests = await self._contest_dao.get_created_by_paginated(
+            user_id=user_id, limit=limit, offset=offset
+        )
+        total = await self._contest_dao.count_created_by(user_id)
+        return contests, total
 
     # ------------------------------------------------------------------
     # Lifecycle State Machine
@@ -342,24 +359,31 @@ class ContestService:
     # Queries
     # ------------------------------------------------------------------
 
-    async def get_my_contests(self, user_id: str) -> list[Contest]:
+    async def get_my_contests(
+        self, user_id: str, page: int = 1, limit: int = 20
+    ) -> tuple[list[Contest], int]:
         """
-        Get all contests that any of the user's teams are participating in.
+        Get paginated contests that any of the user's teams are participating in.
+        Returns (contests, total).
         """
-        team_ids = await self._team_service.get_my_teams(user_id)
+        # Fetch all teams (no pagination) to collect all contest memberships
+        all_teams, _ = await self._team_service.get_my_teams(user_id, page=1, limit=10_000)
         contest_ids: set[str] = set()
 
-        for team in team_ids:
+        for team in all_teams:
             registrations = await self._team_contest_dao.get_by_team(team.id)
             for reg in registrations:
                 contest_ids.add(reg.contest_id)
 
-        contests = []
+        all_contests = []
         for contest_id in contest_ids:
             contest = await self._contest_dao.get_by_id(contest_id)
             if contest:
-                contests.append(contest)
-        return contests
+                all_contests.append(contest)
+
+        total = len(all_contests)
+        offset = (page - 1) * limit
+        return all_contests[offset : offset + limit], total
 
     async def get_team_in_contest(self, contest_id: str, team_id: str) -> TeamContest:
         """
@@ -404,6 +428,16 @@ class ContestService:
             reverse=True,
         )
         return [(i + 1, tc) for i, tc in enumerate(sorted_teams)]
+
+    async def list_registered_teams(
+        self, contest_id: str
+    ) -> list[tuple[str, str]]:
+        """
+        Return (team_id, team_name) pairs for all teams registered in a contest.
+        Raises ContestNotFoundException if the contest does not exist.
+        """
+        await self.get_contest(contest_id)
+        return await self._team_contest_dao.get_registered_teams(contest_id)
 
     async def get_team_in_contest_safe(
         self, contest_id: str, team_id: str

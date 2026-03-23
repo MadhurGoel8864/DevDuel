@@ -76,6 +76,28 @@ class ContestDAO:
             logger.error(f"Failed to get all contests: {e}")
             raise e
 
+    async def count_all(self) -> int:
+        try:
+            from sqlalchemy import func
+
+            result = await self._session.execute(
+                select(func.count()).select_from(Contest)
+            )
+            return result.scalar_one()
+        except Exception as e:
+            logger.error(f"Failed to count all contests: {e}")
+            raise e
+
+    async def get_all_paginated(self, limit: int, offset: int) -> list[Contest]:
+        try:
+            result = await self._session.execute(
+                select(Contest).order_by(Contest.created_at.desc()).limit(limit).offset(offset)
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"Failed to get paginated contests: {e}")
+            raise e
+
     async def get_active(self) -> list[Contest]:
         """Return only contests with ACTIVE status."""
         try:
@@ -85,6 +107,58 @@ class ContestDAO:
             return list(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to get active contests: {e}")
+            raise e
+
+    async def count_active(self) -> int:
+        try:
+            from sqlalchemy import func
+
+            result = await self._session.execute(
+                select(func.count()).select_from(Contest).where(Contest.status == ContestStatus.ACTIVE)
+            )
+            return result.scalar_one()
+        except Exception as e:
+            logger.error(f"Failed to count active contests: {e}")
+            raise e
+
+    async def get_active_paginated(self, limit: int, offset: int) -> list[Contest]:
+        try:
+            result = await self._session.execute(
+                select(Contest)
+                .where(Contest.status == ContestStatus.ACTIVE)
+                .order_by(Contest.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"Failed to get paginated active contests: {e}")
+            raise e
+
+    async def count_created_by(self, user_id: str) -> int:
+        try:
+            from sqlalchemy import func
+
+            result = await self._session.execute(
+                select(func.count()).select_from(Contest).where(Contest.created_by == user_id)
+            )
+            return result.scalar_one()
+        except Exception as e:
+            logger.error(f"Failed to count contests by creator {user_id}: {e}")
+            raise e
+
+    async def get_created_by_paginated(self, user_id: str, limit: int, offset: int) -> list[Contest]:
+        try:
+            result = await self._session.execute(
+                select(Contest)
+                .where(Contest.created_by == user_id)
+                .order_by(Contest.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"Failed to get paginated contests by creator {user_id}: {e}")
             raise e
 
     async def update_status(
@@ -334,6 +408,22 @@ class TeamContestDAO:
             return result.scalar()
         except Exception as e:
             logger.error(f"Failed to check active contest for team {team_id}: {e}")
+            raise e
+
+    async def get_registered_teams(self, contest_id: str) -> list[tuple[str, str]]:
+        """Return list of (team_id, team_name) for all teams registered in a contest."""
+        try:
+            from app.database.models.teams import Team
+
+            result = await self._session.execute(
+                select(TeamContest.team_id, Team.name)
+                .join(Team, TeamContest.team_id == Team.id)
+                .where(TeamContest.contest_id == contest_id)
+                .order_by(Team.name)
+            )
+            return list(result.all())
+        except Exception as e:
+            logger.error(f"Failed to get registered teams for contest {contest_id}: {e}")
             raise e
 
     async def get_registered_team_ids(self, contest_id: str) -> list[str]:
