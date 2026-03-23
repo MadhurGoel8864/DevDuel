@@ -289,6 +289,41 @@ class UserDAO:
             logger.error(f"Failed to update password for user {user_id}: {e}")
             raise e
 
+    async def update_profile(
+        self,
+        user_id: str,
+        full_name: str | None,
+        username: str | None,
+    ) -> User:
+        """
+        Update a user's full_name and/or username.
+
+        Args:
+            user_id: User ID to update.
+            full_name: New full name, or None to leave unchanged.
+            username: New username, or None to leave unchanged.
+
+        Returns:
+            User: Updated user instance.
+        """
+        try:
+            user = await self.get_by_id(user_id)
+            if not user:
+                raise ValueError(f"User with ID {user_id} not found")
+
+            if full_name is not None:
+                user.full_name = full_name
+            if username is not None:
+                user.username = username
+
+            await self._session.commit()
+            await self._session.refresh(user)
+            return user
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to update profile for user {user_id}: {e}")
+            raise e
+
     async def update_last_login(self, user_id: str) -> User:
         """
         Update user's last_login_at timestamp.

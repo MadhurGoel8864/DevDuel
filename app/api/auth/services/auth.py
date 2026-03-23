@@ -126,6 +126,7 @@ class AuthService:
         token_payload = {
             "sub": user.id,
             "email": user.email,
+            "is_organizer": user.is_organizer,
         }
 
         # Generate JWT tokens
@@ -270,10 +271,15 @@ class AuthService:
         user_id = payload.get("sub")
         email = payload.get("email")
 
+        # Fetch latest is_organizer from DB so revoked organizer status takes effect
+        user = await self._user_dao.get_by_id(user_id)
+        is_organizer = user.is_organizer if user else False
+
         # Create new access token payload
         new_token_payload = {
             "sub": user_id,
             "email": email,
+            "is_organizer": is_organizer,
         }
 
         # Generate new JWT access token

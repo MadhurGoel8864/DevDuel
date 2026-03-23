@@ -8,8 +8,12 @@ from fastapi import BackgroundTasks, Depends, Request
 from app.api.auth.services.cache import store_user_otp
 from app.api.common.utils import generate_otp
 from app.api.users.dao.users import UserDAO, get_user_dao
-from app.api.users.schemas.users import UserCreateData
-from app.core.exceptions import UserAlreadyExistsException, UserNotFoundException
+from app.api.users.schemas.users import UserCreateData, UserUpdateData
+from app.core.exceptions import (
+    UserAlreadyExistsException,
+    UserNotFoundException,
+    UserValidationException,
+)
 from app.core.exceptions.auth import UnauthorizedException
 from app.core.security.password import hash_password
 from app.database.models.users import User
@@ -199,6 +203,39 @@ class UserService:
             logger.error(f"Failed to queue email task for {email}: {e}")
 
         return True
+
+    async def update_profile(self, user_id: str, update_data: UserUpdateData) -> User:
+        """
+        Update a user's full_name and/or username.
+
+        Args:
+            user_id: ID of the user to update.
+            update_data: Fields to update (both optional).
+
+        Returns:
+            User: The updated user instance.
+
+        Raises:
+            UserNotFoundException: If user does not exist.
+            UserValidationException: If the requested username is already taken.
+        """
+        user = await self._user_dao.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundException(user_id=user_id)
+
+        if update_data.username is not None and update_data.username != user.username:
+            existing = await self._user_dao.get_by_username(update_data.username)
+            if existing:
+                raise UserValidationException(
+                    message=f"Username '{update_data.username}' is already taken.",
+                    details={"username": update_data.username},
+                )
+
+        return await self._user_dao.update_profile(
+            user_id=user_id,
+            full_name=update_data.full_name,
+            username=update_data.username,
+        )
 
     async def get_or_create_oauth_user(
         self,
