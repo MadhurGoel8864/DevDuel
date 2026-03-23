@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -118,6 +118,33 @@ class TeamMemberDAO:
             return list(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to get teams for user {user_id}: {e}")
+            raise e
+
+    async def count_teams_for_user(self, user_id: str) -> int:
+        try:
+            result = await self._session.execute(
+                select(func.count()).select_from(TeamMember).where(TeamMember.user_id == user_id)
+            )
+            return result.scalar_one()
+        except Exception as e:
+            logger.error(f"Failed to count teams for user {user_id}: {e}")
+            raise e
+
+    async def get_teams_for_user_paginated(
+        self, user_id: str, limit: int, offset: int
+    ) -> list[str]:
+        """Return paginated list of team_ids the user belongs to."""
+        try:
+            result = await self._session.execute(
+                select(TeamMember.team_id)
+                .where(TeamMember.user_id == user_id)
+                .order_by(TeamMember.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"Failed to get paginated teams for user {user_id}: {e}")
             raise e
 
     async def count_by_role(self, team_id: str, role: TeamRole) -> int:

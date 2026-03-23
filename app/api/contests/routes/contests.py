@@ -13,6 +13,7 @@ from app.api.contests.handlers.contests import (
     list_active_contests_handler,
     list_contests_handler,
     list_created_contests_handler,
+    list_registered_teams_handler,
     open_registration_handler,
     register_team_handler,
     start_contest_handler,
@@ -44,7 +45,10 @@ router.add_api_route(
 router.add_api_route(
     "/{contest_id}/register", register_team_handler, methods=["POST"], status_code=201
 )
-# Leaderboard and team-in-contest
+# Registered teams list + leaderboard
+router.add_api_route(
+    "/{contest_id}/registered-teams", list_registered_teams_handler, methods=["GET"]
+)
 router.add_api_route(
     "/{contest_id}/teams", get_contest_leaderboard_handler, methods=["GET"]
 )

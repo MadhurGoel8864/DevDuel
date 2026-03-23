@@ -2,11 +2,12 @@
 
 import logging
 
-from fastapi import Body, Depends, Path
+from fastapi import Body, Depends, Path, Query
 
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
 from app.api.common.responses import MessageResponse
+from app.core.responses import MetaResponse
 from app.api.contests.services.contests import ContestService, get_contest_service
 from app.api.teams.schemas.teams import (
     AddMemberRequest,
@@ -14,6 +15,7 @@ from app.api.teams.schemas.teams import (
     CanJoinResponseData,
     TeamCreateRequest,
     TeamListResponse,
+    TeamPaginatedListResponse,
     TeamResponse,
     TeamResponseData,
     TeamRoleResponse,
@@ -42,12 +44,19 @@ async def create_team_handler(
 
 
 async def get_my_teams_handler(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
     current_user: UserWithPermissions = Depends(get_current_user),
     team_service: TeamService = Depends(get_team_service),
-) -> TeamListResponse:
-    """Get all teams the authenticated user is a member of."""
-    teams = await team_service.get_my_teams(user_id=current_user.user_id)
-    return TeamListResponse(data=[TeamSummaryData.model_validate(t) for t in teams])
+) -> TeamPaginatedListResponse:
+    """Get all teams the authenticated user is a member of, with pagination."""
+    teams, total = await team_service.get_my_teams(
+        user_id=current_user.user_id, page=page, limit=limit
+    )
+    return TeamPaginatedListResponse(
+        data=[TeamSummaryData.model_validate(t) for t in teams],
+        meta=MetaResponse(page=page, limit=limit, total=total),
+    )
 
 
 async def get_team_handler(

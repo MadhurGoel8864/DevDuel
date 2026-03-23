@@ -188,17 +188,24 @@ class TeamService:
             raise TeamNotFoundException(team_id=team_id)
         return team
 
-    async def get_my_teams(self, user_id: str) -> list[Team]:
+    async def get_my_teams(
+        self, user_id: str, page: int = 1, limit: int = 20
+    ) -> tuple[list[Team], int]:
         """
-        Get all teams the user is a member of.
+        Get paginated teams the user is a member of.
+        Returns (teams, total).
         """
-        team_ids = await self._member_dao.get_teams_for_user(user_id)
+        offset = (page - 1) * limit
+        team_ids = await self._member_dao.get_teams_for_user_paginated(
+            user_id=user_id, limit=limit, offset=offset
+        )
+        total = await self._member_dao.count_teams_for_user(user_id)
         teams = []
         for team_id in team_ids:
             team = await self._team_dao.get_by_id(team_id)
             if team:
                 teams.append(team)
-        return teams
+        return teams, total
 
     async def add_member(
         self,

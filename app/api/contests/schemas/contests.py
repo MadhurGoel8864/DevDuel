@@ -3,10 +3,10 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.core.enums import ContestStatus
-from app.core.responses import APIResponse
+from app.core.responses import APIResponse, PaginatedResponse
 from app.core.timezone_utils import ISTDatetimeMixin
 
 
@@ -85,6 +85,34 @@ class ContestSummaryData(BaseSchema, ISTDatetimeMixin):
     status: ContestStatus
     created_by: str
     created_at: datetime
+    team_count: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def compute_team_count(cls, data):
+        if hasattr(data, "teams"):
+            return {
+                "id": data.id,
+                "name": data.name,
+                "description": data.description,
+                "start_time": data.start_time,
+                "end_time": data.end_time,
+                "status": data.status,
+                "created_by": data.created_by,
+                "created_at": data.created_at,
+                "team_count": len(data.teams),
+            }
+        return data
+
+
+# ── Registered Teams Schema ───────────────────────────────────────────────────
+
+
+class RegisteredTeamData(BaseSchema):
+    """Brief team info for the registered-teams list endpoint."""
+
+    team_id: str
+    team_name: str
 
 
 # ── Leaderboard / Team-in-Contest Schemas ────────────────────────────────────
@@ -112,7 +140,9 @@ class LeaderboardEntryData(BaseSchema):
 
 # ── Final Response Aliases ─────────────────────────────────────────────────────
 
+ContestRegisteredTeamsResponse = APIResponse[list[RegisteredTeamData]]
 ContestResponse = APIResponse[ContestResponseData]
 ContestListResponse = APIResponse[list[ContestSummaryData]]
+ContestPaginatedListResponse = PaginatedResponse[ContestSummaryData]
 TeamContestDetailResponse = APIResponse[TeamContestDetailData]
 LeaderboardResponse = APIResponse[list[LeaderboardEntryData]]
