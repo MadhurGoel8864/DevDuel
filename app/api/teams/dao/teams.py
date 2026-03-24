@@ -120,7 +120,23 @@ class TeamMemberDAO:
             logger.error(f"Failed to get teams for user {user_id}: {e}")
             raise e
 
+    async def count_members_per_team(self, team_ids: list[str]) -> dict[str, int]:
+        """Return {team_id: member_count} for the given team IDs. Missing IDs → 0."""
+        if not team_ids:
+            return {}
+        try:
+            result = await self._session.execute(
+                select(TeamMember.team_id, func.count(TeamMember.id))
+                .where(TeamMember.team_id.in_(team_ids))
+                .group_by(TeamMember.team_id)
+            )
+            return dict(result.all())
+        except Exception as e:
+            logger.error(f"Failed to count members per team: {e}")
+            raise e
+
     async def count_teams_for_user(self, user_id: str) -> int:
+        """Return the total number of teams the user belongs to."""
         try:
             result = await self._session.execute(
                 select(func.count()).select_from(TeamMember).where(TeamMember.user_id == user_id)

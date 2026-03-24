@@ -4,6 +4,8 @@ import logging
 
 from fastapi import Body, Depends, Path, Query
 
+from app.api.common.dependencies import PaginationParams, get_pagination
+
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
 from app.api.common.responses import MessageResponse
@@ -24,6 +26,7 @@ from app.api.teams.schemas.teams import (
     TeamStatusResponseData,
     TeamSummaryData,
 )
+from app.core.responses import MetaResponse
 from app.api.teams.services.teams import TeamService, get_team_service
 
 logger = logging.getLogger(__name__)
@@ -48,14 +51,23 @@ async def get_my_teams_handler(
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     current_user: UserWithPermissions = Depends(get_current_user),
     team_service: TeamService = Depends(get_team_service),
-) -> TeamPaginatedListResponse:
-    """Get all teams the authenticated user is a member of, with pagination."""
+    pagination: PaginationParams = Depends(get_pagination),
+) -> TeamListResponse:
+    """Get a paginated list of teams the authenticated user is a member of."""
     teams, total = await team_service.get_my_teams(
-        user_id=current_user.user_id, page=page, limit=limit
+        user_id=current_user.user_id,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
-    return TeamPaginatedListResponse(
-        data=[TeamSummaryData.model_validate(t) for t in teams],
-        meta=MetaResponse(page=page, limit=limit, total=total),
+    counts = await team_service.get_member_counts([t.id for t in teams])
+    return TeamListResponse(
+        data=[
+            TeamSummaryData.model_validate(t).model_copy(
+                update={"member_count": counts.get(t.id, 0)}
+            )
+            for t in teams
+        ],
+        meta=MetaResponse(page=pagination.page, limit=pagination.limit, total=total),
     )
 
 

@@ -367,7 +367,7 @@ class ContestService:
         Returns (contests, total).
         """
         # Fetch all teams (no pagination) to collect all contest memberships
-        all_teams, _ = await self._team_service.get_my_teams(user_id, page=1, limit=10_000)
+        all_teams, _ = await self._team_service.get_my_teams(user_id, skip=0, limit=9999)
         contest_ids: set[str] = set()
 
         for team in all_teams:

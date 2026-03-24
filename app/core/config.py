@@ -71,12 +71,10 @@ class Settings(BaseSettings):
     PENDING_JOIN_EXPIRE_SECONDS: int = 86400  # 1 day
 
     # Frontend URLs embedded in invite emails
-    FRONTEND_ACCEPT_INVITE_URL: str = Field(
+    FRONTEND_INVITE_URL: str = Field(
         default=f"{FRONTEND_BASE_URL}/teams/invite"
     )
-    FRONTEND_DECLINE_INVITE_URL: str = Field(
-        default=f"{FRONTEND_BASE_URL}/teams/invite"
-    )
+
     FRONTEND_REGISTER_INVITE_URL: str = Field(
         default=f"{FRONTEND_BASE_URL}/register"
     )
