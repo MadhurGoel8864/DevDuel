@@ -51,11 +51,21 @@ Authorization: Bearer <access_token>
 
 ## Standard Response Format
 
+Most API endpoints (Users, Teams, Contests, Problems, Bidding) wrap their response in the following envelope:
+
 **Success:**
 ```json
 {
   "success": true,
-  "data": { },
+  "data": { }
+}
+```
+
+**Paginated Success** (list endpoints that support `page`/`limit`):
+```json
+{
+  "success": true,
+  "data": [ ],
   "meta": {
     "page": 1,
     "limit": 20,
@@ -75,6 +85,8 @@ Authorization: Bearer <access_token>
   }
 }
 ```
+
+> **Note:** Auth endpoints (`/auth/*`) return their payloads directly — **not** wrapped in `success/data`. See each endpoint for its exact response shape.
 
 > **Note:** Most POST/PUT/PATCH endpoints wrap the request body in a `data` key.
 > ```json
@@ -101,6 +113,8 @@ Authorization: Bearer <access_token>
 
 ## Auth Endpoints
 
+> Auth responses are **not** wrapped in the `success/data` envelope — they return their fields directly.
+
 ### POST `/auth/register`
 Register a new user. Sends a verification OTP to email.
 
@@ -110,23 +124,20 @@ Register a new user. Sends a verification OTP to email.
 **Request body:**
 ```json
 {
-  "data": {
-    "email": "user@example.com",
-    "password": "string",
-    "full_name": "John Doe",
-    "invite_token": "optional-team-invite-token"
-  }
+  "email": "user@example.com",
+  "password": "string",
+  "full_name": "John Doe",
+  "invite_token": "optional-team-invite-token"
 }
 ```
+
+> Pass `invite_token` if the user arrived via a team invite link — they will be auto-added to the team after OTP verification.
 
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "message": "Registration successful. OTP sent to email.",
-    "email": "user@example.com"
-  }
+  "message": "Registration successful. Please check your email to verify your account.",
+  "email": "user@example.com"
 }
 ```
 
@@ -148,21 +159,18 @@ Login with email and password.
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "access_token": "eyJ...",
-    "refresh_token": "eyJ...",
-    "token_type": "bearer"
-  }
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "bearer"
 }
 ```
 
 ---
 
 ### POST `/auth/logout`
-Invalidate the refresh token.
+Blacklist both access and refresh tokens.
 
-**Auth required:** Yes
+**Auth required:** Yes (access token in `Authorization` header)
 
 **Request body:**
 ```json
@@ -174,15 +182,14 @@ Invalidate the refresh token.
 **Response:**
 ```json
 {
-  "success": true,
-  "data": { "message": "Logged out successfully." }
+  "message": "Logged out successfully."
 }
 ```
 
 ---
 
 ### POST `/auth/refresh`
-Get a new access and refresh token pair.
+Exchange a valid refresh token for a new access + refresh token pair.
 
 **Auth required:** No
 
@@ -196,45 +203,39 @@ Get a new access and refresh token pair.
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "access_token": "eyJ...",
-    "refresh_token": "eyJ...",
-    "token_type": "bearer"
-  }
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "bearer"
 }
 ```
 
 ---
 
 ### GET `/auth/me`
-Get the current user's profile.
+Get the current authenticated user's profile.
 
 **Auth required:** Yes
 
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "user_id": "uuid",
-    "email": "user@example.com",
-    "username": "johndoe",
-    "role": "user",
-    "permissions": ["read"],
-    "is_active": true,
-    "is_verified": true,
-    "is_organizer": false,
-    "profile_img_url": "https://...",
-    "last_login_at": "2026-03-23T10:00:00+05:30"
-  }
+  "user_id": "uuid",
+  "email": "user@example.com",
+  "username": "johndoe",
+  "role": "user",
+  "permissions": [],
+  "is_active": true,
+  "is_verified": true,
+  "is_organizer": false,
+  "profile_img_url": null,
+  "last_login_at": null
 }
 ```
 
 ---
 
 ### POST `/auth/send-otp`
-Send an OTP to the provided email for verification.
+Send a new OTP to the provided email.
 
 **Auth required:** No
 
@@ -248,11 +249,8 @@ Send an OTP to the provided email for verification.
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "message": "OTP sent.",
-    "email": "user@example.com"
-  }
+  "message": "OTP sent successfully. Please check your email.",
+  "email": "user@example.com"
 }
 ```
 
@@ -274,12 +272,9 @@ Verify the OTP to activate the account.
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "message": "Email verified successfully.",
-    "is_verified": true,
-    "email": "user@example.com"
-  }
+  "message": "User verified successfully",
+  "is_verified": true,
+  "email": "user@example.com"
 }
 ```
 
@@ -288,10 +283,11 @@ Verify the OTP to activate the account.
 ---
 
 ### POST `/auth/resend-otp`
-Resend the OTP to the provided email.
+Resend OTP (for unverified accounts).
 
 **Auth required:** No
-**Request / Response:** Same as `POST /auth/send-otp`
+
+**Request body / Response:** Same as `POST /auth/send-otp`
 
 ---
 
@@ -310,11 +306,8 @@ Request a password reset email.
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "message": "Password reset link sent.",
-    "email": "user@example.com"
-  }
+  "message": "Password reset instructions have been sent to your email.",
+  "email": "user@example.com"
 }
 ```
 
@@ -336,27 +329,18 @@ Reset the password using a token from the reset email.
 **Response:**
 ```json
 {
-  "success": true,
-  "data": { "message": "Password reset successfully." }
+  "message": "Password reset successfully"
 }
 ```
 
 ---
 
 ### GET `/auth/google/login`
-Get the Google OAuth consent URL.
+Initiate Google OAuth login. **Redirects** the browser to Google's consent page (HTTP 302).
 
 **Auth required:** No
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "auth_url": "https://accounts.google.com/o/oauth2/auth?..."
-  }
-}
-```
+> This endpoint returns an HTTP redirect — it does not return JSON.
 
 ---
 
@@ -375,12 +359,9 @@ Google OAuth callback. Called by Google after user consent.
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "access_token": "eyJ...",
-    "refresh_token": "eyJ...",
-    "token_type": "bearer"
-  }
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "bearer"
 }
 ```
 
@@ -417,6 +398,7 @@ Create a user (alternative registration endpoint).
     "role": "user",
     "is_active": true,
     "is_verified": false,
+    "is_organizer": false,
     "profile_img_url": null,
     "created_at": "2026-03-23T10:00:00+05:30"
   }
@@ -457,6 +439,7 @@ Update the authenticated user's profile. Only `full_name` and `username` can be 
     "role": "user",
     "is_active": true,
     "is_verified": true,
+    "is_organizer": false,
     "profile_img_url": null,
     "created_at": "2026-03-23T10:00:00+05:30",
     "updated_at": "2026-03-23T10:05:00+05:30"
@@ -492,6 +475,7 @@ Get a user's public profile.
     "role": "user",
     "is_active": true,
     "is_verified": true,
+    "is_organizer": false,
     "profile_img_url": null,
     "created_at": "2026-03-23T10:00:00+05:30",
     "updated_at": "2026-03-23T10:00:00+05:30",
@@ -566,14 +550,13 @@ Get a paginated list of teams the authenticated user belongs to.
       "id": "uuid",
       "name": "Team Alpha",
       "created_by": "uuid",
-      "created_at": "2026-03-23T10:00:00+05:30",
-      "member_count": 2
+      "created_at": "2026-03-23T10:00:00+05:30"
     }
   ],
   "meta": {
     "page": 1,
     "limit": 20,
-    "total": 1
+    "total": 3
   }
 }
 ```
@@ -596,17 +579,11 @@ Get full team details including members.
 ---
 
 ### DELETE `/teams/{team_id}`
-Delete a team. Not allowed if the team is in an active contest.
+Delete a team. Not allowed if the team is in an active contest. Returns the deleted team's data.
 
 **Auth required:** Yes (creator only)
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": { "message": "Team deleted." }
-}
-```
+**Response:** Same as `POST /teams`
 
 ---
 
@@ -659,8 +636,7 @@ Leave a team voluntarily. Team creator must delete the team instead.
 **Response:**
 ```json
 {
-  "success": true,
-  "data": { "message": "Left team successfully." }
+  "message": "You have left the team."
 }
 ```
 
@@ -722,7 +698,7 @@ Check if a team is eligible to join a specific contest.
     "team_id": "uuid",
     "contest_id": "uuid",
     "can_join": false,
-    "reasons": ["Team is missing a CODING member."]
+    "reasons": ["Team is missing roles: CODING"]
   }
 }
 ```
@@ -883,9 +859,16 @@ Create a new contest.
 ---
 
 ### GET `/contests`
-List all contests.
+List all contests (paginated).
 
-**Auth required:** No
+**Auth required:** Yes
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `page` | int | `1` | Page number (min: 1) |
+| `limit` | int | `20` | Items per page (min: 1, max: 100) |
 
 **Response:**
 ```json
@@ -900,43 +883,71 @@ List all contests.
       "end_time": "2026-04-01T14:00:00+05:30",
       "status": "REGISTRATION_OPEN",
       "created_by": "uuid",
-      "created_at": "2026-03-23T10:00:00+05:30",
-      "team_count": 5
+      "created_at": "2026-03-23T10:00:00+05:30"
     }
-  ]
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 42
+  }
 }
 ```
 
 ---
 
 ### GET `/contests/active`
-List only active contests (`status = ACTIVE`).
+List only active contests (`status = ACTIVE`), paginated.
 
-**Auth required:** No
+**Auth required:** Yes
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `page` | int | `1` | Page number (min: 1) |
+| `limit` | int | `20` | Items per page (min: 1, max: 100) |
+
 **Response:** Same schema as `GET /contests`
 
 ---
 
 ### GET `/contests/me`
-List contests the authenticated user's team(s) are registered in.
+List contests the authenticated user's team(s) are registered in (paginated).
 
 **Auth required:** Yes
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `page` | int | `1` | Page number (min: 1) |
+| `limit` | int | `20` | Items per page (min: 1, max: 100) |
+
 **Response:** Same schema as `GET /contests`
 
 ---
 
 ### GET `/contests/created`
-List contests created by the authenticated user.
+List contests created by the authenticated user (paginated).
 
 **Auth required:** Yes
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `page` | int | `1` | Page number (min: 1) |
+| `limit` | int | `20` | Items per page (min: 1, max: 100) |
+
 **Response:** Same schema as `GET /contests`
 
 ---
 
 ### GET `/contests/{contest_id}`
-Get full contest details.
+Get full contest details, including registered teams.
 
-**Auth required:** No
+**Auth required:** Yes
 
 **Response:** Same schema as `POST /contests`
 
@@ -966,7 +977,7 @@ Update contest details. Not allowed when status is `ENDED`. Sends update email t
 ### POST `/contests/{contest_id}/register`
 Register a team for a contest. Contest must be in `REGISTRATION_OPEN` status.
 
-**Auth required:** Yes
+**Auth required:** Yes (team creator only)
 **Status:** `201 Created`
 
 **Request body:**
@@ -978,47 +989,14 @@ Register a team for a contest. Contest must be in `REGISTRATION_OPEN` status.
 }
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "team_id": "uuid",
-    "contest_id": "uuid",
-    "currency": 1000,
-    "score": 0,
-    "created_at": "2026-03-23T10:00:00+05:30"
-  }
-}
-```
-
----
-
-### GET `/contests/{contest_id}/registered-teams`
-List all teams registered for a contest.
-
-**Auth required:** No
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "team_id": "uuid",
-      "team_name": "Team Alpha"
-    }
-  ]
-}
-```
+**Response:** Same schema as `POST /contests` (returns the full updated contest with teams list)
 
 ---
 
 ### GET `/contests/{contest_id}/teams`
 Get the leaderboard for a contest, ordered by score (desc), then currency (desc).
 
-**Auth required:** No
+**Auth required:** Yes
 
 **Response:**
 ```json
@@ -1040,7 +1018,7 @@ Get the leaderboard for a contest, ordered by score (desc), then currency (desc)
 ### GET `/contests/{contest_id}/teams/{team_id}`
 Get a specific team's standing in a contest.
 
-**Auth required:** No
+**Auth required:** Yes
 
 **Response:**
 ```json
@@ -1064,13 +1042,7 @@ Transition contest from `DRAFT` → `REGISTRATION_OPEN`.
 
 **Auth required:** Yes (`is_organizer: true`, creator only)
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": { "message": "Registration opened." }
-}
-```
+**Response:** Same schema as `POST /contests` (returns the updated contest)
 
 ---
 
@@ -1079,13 +1051,7 @@ Transition contest from `REGISTRATION_OPEN` → `ACTIVE`.
 
 **Auth required:** Yes (`is_organizer: true`, creator only)
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": { "message": "Contest started." }
-}
-```
+**Response:** Same schema as `POST /contests` (returns the updated contest)
 
 ---
 
@@ -1094,20 +1060,14 @@ Transition contest from `ACTIVE` → `ENDED`.
 
 **Auth required:** Yes (`is_organizer: true`, creator only)
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": { "message": "Contest ended." }
-}
-```
+**Response:** Same schema as `POST /contests` (returns the updated contest)
 
 ---
 
 ## Problems Endpoints
 
 ### POST `/problems`
-Create a new problem.
+Create a new reusable coding problem. Slug is auto-generated from the title.
 
 **Auth required:** Yes
 **Status:** `201 Created`
@@ -1151,25 +1111,37 @@ Create a new problem.
 ---
 
 ### GET `/problems`
-List all problems.
+List problems with optional filters.
 
-**Auth required:** No
-**Response:** Array of problem objects (same schema as above)
+**Auth required:** Yes
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `difficulty` | string | — | Filter by `easy`, `medium`, or `hard` |
+| `search` | string | — | Search by title keyword |
+| `created_by` | uuid | — | Filter by creator user ID |
+| `page` | int | `1` | Page number (min: 1) |
+| `limit` | int | `20` | Items per page (min: 1, max: 100) |
+
+**Response:** Array of problem objects wrapped in `APIResponse` (same schema as `POST /problems`)
 
 ---
 
 ### GET `/problems/{problem_id}`
 Get a problem by ID.
 
-**Auth required:** No
-**Response:** Single problem object
+**Auth required:** Yes
+
+**Response:** Single problem object (same schema as `POST /problems`)
 
 ---
 
 ### PUT `/problems/{problem_id}`
-Update a problem (all fields optional).
+Update a problem. Only the creator may update. All fields optional.
 
-**Auth required:** Yes
+**Auth required:** Yes (creator only)
 
 **Request body:**
 ```json
@@ -1186,29 +1158,32 @@ Update a problem (all fields optional).
 }
 ```
 
-**Response:** Updated problem object
+**Response:** Updated problem object (same schema as `POST /problems`)
 
 ---
 
 ### DELETE `/problems/{problem_id}`
-Delete a problem.
+Soft-delete a problem (`is_active = false`). Only the creator may delete. Returns the updated problem object.
 
-**Auth required:** Yes
+**Auth required:** Yes (creator only)
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": { "message": "Problem deleted." }
-}
-```
+**Response:** Problem object with `is_active: false` (same schema as `POST /problems`)
 
 ---
 
 ### GET `/problems/builtin/problems`
-List platform-curated built-in problems that organizers can import.
+List platform-curated built-in problems that organizers can import into contests.
 
-**Auth required:** No
+**Auth required:** Yes
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `difficulty` | string | — | Filter by `easy`, `medium`, or `hard` |
+| `search` | string | — | Search by title keyword |
+| `page` | int | `1` | Page number (min: 1) |
+| `limit` | int | `20` | Items per page (min: 1, max: 100) |
 
 **Response:**
 ```json
@@ -1236,7 +1211,7 @@ List platform-curated built-in problems that organizers can import.
 ## Contest Problems Endpoints
 
 ### POST `/contests/{contest_id}/problems`
-Add a problem to a contest with an order.
+Add a problem to a contest with a bidding order.
 
 **Auth required:** Yes
 **Status:** `201 Created`
@@ -1272,30 +1247,25 @@ Add a problem to a contest with an order.
 ---
 
 ### GET `/contests/{contest_id}/problems`
-List all problems in a contest, ordered by `problem_order`.
+List all active problems in a contest, ordered by `problem_order`.
 
-**Auth required:** No
-**Response:** Array of contest problem objects (same as above)
+**Auth required:** Yes
+
+**Response:** Array of contest problem objects (same schema as above)
 
 ---
 
 ### DELETE `/contests/{contest_id}/problems/{contest_problem_id}`
-Remove a problem from a contest.
+Soft-remove a problem from a contest (`is_active = false`). Returns the updated contest problem.
 
 **Auth required:** Yes
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": { "message": "Problem removed from contest." }
-}
-```
+**Response:** Contest problem object with `is_active: false` (same schema as `POST /contests/{contest_id}/problems`)
 
 ---
 
 ### POST `/contests/{contest_id}/problems/import`
-Import a built-in platform problem into a contest.
+Import a built-in platform problem into a contest. Clones the built-in problem into a new user-owned problem and attaches it to the contest.
 
 **Auth required:** Yes
 **Status:** `201 Created`
@@ -1317,7 +1287,7 @@ Import a built-in platform problem into a contest.
 ## Bidding Endpoints
 
 ### POST `/bidding/contests/{contest_id}/auctions/start`
-Start an auction for the next available problem. Contest must be `ACTIVE`.
+Start an auction for a problem in an ACTIVE contest. Broadcasts `AUCTION_STARTED` to all WebSocket clients. Auto-finishes after `duration_seconds`.
 
 **Auth required:** Yes
 **Status:** `201 Created`
@@ -1331,6 +1301,8 @@ Start an auction for the next available problem. Contest must be `ACTIVE`.
   }
 }
 ```
+
+> `contest_problem_id` is required. `duration_seconds` defaults to `60`.
 
 **Response:**
 ```json
@@ -1355,17 +1327,18 @@ Start an auction for the next available problem. Contest must be `ACTIVE`.
 ---
 
 ### GET `/bidding/contests/{contest_id}/auctions/current`
-Get the currently active auction for a contest.
+Get the currently active (or most recent) auction for a contest.
 
-**Auth required:** No
-**Response:** Same as start auction
+**Auth required:** Yes
+
+**Response:** Same schema as start auction
 
 ---
 
 ### GET `/bidding/auctions/{auction_id}/result`
 Get the result of a finished auction.
 
-**Auth required:** No
+**Auth required:** Yes
 
 **Response:**
 ```json
@@ -1389,31 +1362,69 @@ Get the result of a finished auction.
 
 Connect to the real-time bidding channel for a contest.
 
-**Auth:** Pass the access token as a query parameter:
+**Auth:** No token required to connect. Authorization is validated per-bid via `user_id` in the message.
+
 ```
-wss://<domain>/api/bidding/ws/{contest_id}?token=<access_token>
+ws://<domain>/api/bidding/ws/{contest_id}
 ```
 
 ---
 
-**Client → Server (Place a bid):**
+### Client → Server Messages
+
+**Place a bid:**
 ```json
 {
   "type": "PLACE_BID",
+  "auction_id": "uuid",
   "team_id": "uuid",
+  "user_id": "uuid",
   "amount": 350
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Must be `"PLACE_BID"` |
-| `team_id` | uuid | The bidding team's ID |
-| `amount` | int | Bid amount (must be > current highest bid) |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Must be `"PLACE_BID"` |
+| `auction_id` | uuid | Yes | The ID of the active auction |
+| `team_id` | uuid | Yes | The bidding team's ID |
+| `user_id` | uuid | Yes | Must be the team's `BIDDING`-role member |
+| `amount` | int | Yes | Bid amount — must exceed current highest bid |
 
 ---
 
-**Server → All Clients (New highest bid):**
+**Manually finish an auction** (organizer override):
+```json
+{
+  "type": "FINISH_AUCTION",
+  "auction_id": "uuid"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Must be `"FINISH_AUCTION"` |
+| `auction_id` | uuid | Yes | The auction to finish |
+
+---
+
+### Server → All Clients Messages
+
+**Auction started** (broadcast when organizer starts a new auction):
+```json
+{
+  "type": "AUCTION_STARTED",
+  "auction_id": "uuid",
+  "contest_problem_id": "uuid",
+  "base_price": 200,
+  "start_time": "2026-03-23T10:00:00+05:30",
+  "end_time": "2026-03-23T10:01:00+05:30"
+}
+```
+
+---
+
+**New highest bid** (broadcast after each accepted bid):
 ```json
 {
   "type": "NEW_HIGHEST_BID",
@@ -1424,17 +1435,33 @@ wss://<domain>/api/bidding/ws/{contest_id}?token=<access_token>
 
 ---
 
-**Server → All Clients (Auction ended):**
+**Auction finished** (broadcast when timer expires or FINISH_AUCTION is triggered):
 ```json
 {
   "type": "AUCTION_FINISHED",
+  "auction_id": "uuid",
   "winning_team_id": "uuid",
-  "winning_bid": 350,
-  "contest_problem_id": "uuid"
+  "winning_bid": 350
 }
 ```
 
-> Race conditions are handled server-side via Redis atomic operations. The `BIDDING` role member places bids; the `CODING` role member solves the assigned problem.
+> `winning_team_id` and `winning_bid` are `null` if no bids were placed.
+
+---
+
+### Server → Sender Only
+
+**Error** (sent only to the client that caused the error):
+```json
+{
+  "type": "ERROR",
+  "message": "Bid amount must exceed the current highest bid."
+}
+```
+
+---
+
+> Race conditions are handled server-side via Redis atomic locks (SET NX EX 5). If a lock is held when a bid arrives, the bid is rejected immediately with an `ERROR` message. Only the `BIDDING`-role member of a team may place bids.
 
 ---
 
@@ -1455,7 +1482,7 @@ Health check.
 ### GET `/db-check`
 Verify database connectivity.
 
-**Auth required:** Yes
+**Auth required:** No
 
 **Response:**
 ```json
@@ -1472,9 +1499,9 @@ DRAFT → REGISTRATION_OPEN → ACTIVE → ENDED
 
 | Transition | Endpoint | Who |
 |------------|----------|-----|
-| DRAFT → REGISTRATION_OPEN | `POST /contests/{id}/open-registration` | Creator/Admin |
-| REGISTRATION_OPEN → ACTIVE | `POST /contests/{id}/start` | Creator/Admin |
-| ACTIVE → ENDED | `POST /contests/{id}/end` | Creator/Admin |
+| DRAFT → REGISTRATION_OPEN | `POST /contests/{id}/open-registration` | Creator/Organizer |
+| REGISTRATION_OPEN → ACTIVE | `POST /contests/{id}/start` | Creator/Organizer |
+| ACTIVE → ENDED | `POST /contests/{id}/end` | Creator/Organizer |
 
 Teams can only register when status is `REGISTRATION_OPEN`. Auctions can only be started when status is `ACTIVE`.
 
@@ -1483,10 +1510,11 @@ Teams can only register when status is `REGISTRATION_OPEN`. Auctions can only be
 ## Bidding Flow Summary
 
 1. Organizer starts contest (`POST /contests/{id}/start`)
-2. Organizer starts auction for a problem (`POST /bidding/contests/{id}/auctions/start`)
-3. All clients connect to WebSocket (`WS /bidding/ws/{contest_id}`)
-4. Team's BIDDING member places bids via WebSocket
-5. Server broadcasts `NEW_HIGHEST_BID` to all clients
-6. Auction ends (by timer) → Server broadcasts `AUCTION_FINISHED`
-7. Winning team's CODING member solves the assigned problem
-8. Organizer starts next auction for the next problem
+2. All clients connect to WebSocket (`WS /bidding/ws/{contest_id}`)
+3. Organizer starts auction for a problem (`POST /bidding/contests/{id}/auctions/start`)
+4. Server broadcasts `AUCTION_STARTED` to all WebSocket clients
+5. Team's `BIDDING` member places bids via WebSocket (`PLACE_BID`)
+6. Server broadcasts `NEW_HIGHEST_BID` to all clients after each accepted bid
+7. Auction ends (by timer or manual `FINISH_AUCTION`) → Server broadcasts `AUCTION_FINISHED`
+8. Winning team's `CODING` member solves the assigned problem
+9. Organizer starts next auction

@@ -15,7 +15,7 @@ class BaseSchema(BaseModel):
 class InviteMemberData(BaseSchema):
     email: EmailStr
     role: TeamRole
-    name: str = ""
+    name: str | None = None
 
 
 class InviteMemberRequest(BaseSchema):

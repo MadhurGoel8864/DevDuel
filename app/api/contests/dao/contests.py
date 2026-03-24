@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Depends
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -57,20 +57,36 @@ class ContestDAO:
             logger.error(f"Failed to get contest by id {contest_id}: {e}")
             raise e
 
-    async def get_created_by(self, user_id: str) -> list[Contest]:
-        """Return all contests created by the given user."""
+    async def get_created_by(self, user_id: str, skip: int = 0, limit: int = 20) -> list[Contest]:
+        """Return contests created by the given user, paginated."""
         try:
             result = await self._session.execute(
-                select(Contest).where(Contest.created_by == user_id)
+                select(Contest)
+                .where(Contest.created_by == user_id)
+                .order_by(Contest.created_at.desc())
+                .offset(skip)
+                .limit(limit)
             )
             return list(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to get contests created by user {user_id}: {e}")
             raise e
 
-    async def get_all(self) -> list[Contest]:
+    async def count_created_by(self, user_id: str) -> int:
         try:
-            result = await self._session.execute(select(Contest))
+            result = await self._session.execute(
+                select(func.count()).select_from(Contest).where(Contest.created_by == user_id)
+            )
+            return result.scalar_one()
+        except Exception as e:
+            logger.error(f"Failed to count contests created by user {user_id}: {e}")
+            raise e
+
+    async def get_all(self, skip: int = 0, limit: int = 20) -> list[Contest]:
+        try:
+            result = await self._session.execute(
+                select(Contest).order_by(Contest.created_at.desc()).offset(skip).limit(limit)
+            )
             return list(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to get all contests: {e}")
@@ -78,11 +94,7 @@ class ContestDAO:
 
     async def count_all(self) -> int:
         try:
-            from sqlalchemy import func
-
-            result = await self._session.execute(
-                select(func.count()).select_from(Contest)
-            )
+            result = await self._session.execute(select(func.count()).select_from(Contest))
             return result.scalar_one()
         except Exception as e:
             logger.error(f"Failed to count all contests: {e}")
@@ -98,11 +110,15 @@ class ContestDAO:
             logger.error(f"Failed to get paginated contests: {e}")
             raise e
 
-    async def get_active(self) -> list[Contest]:
+    async def get_active(self, skip: int = 0, limit: int = 20) -> list[Contest]:
         """Return only contests with ACTIVE status."""
         try:
             result = await self._session.execute(
-                select(Contest).where(Contest.status == ContestStatus.ACTIVE)
+                select(Contest)
+                .where(Contest.status == ContestStatus.ACTIVE)
+                .order_by(Contest.created_at.desc())
+                .offset(skip)
+                .limit(limit)
             )
             return list(result.scalars().all())
         except Exception as e:
@@ -133,18 +149,6 @@ class ContestDAO:
             return list(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to get paginated active contests: {e}")
-            raise e
-
-    async def count_created_by(self, user_id: str) -> int:
-        try:
-            from sqlalchemy import func
-
-            result = await self._session.execute(
-                select(func.count()).select_from(Contest).where(Contest.created_by == user_id)
-            )
-            return result.scalar_one()
-        except Exception as e:
-            logger.error(f"Failed to count contests by creator {user_id}: {e}")
             raise e
 
     async def get_created_by_paginated(self, user_id: str, limit: int, offset: int) -> list[Contest]:
@@ -383,7 +387,7 @@ class TeamContestDAO:
                 ),
             )
             result = await self._session.execute(select(stmt))
-            return result.scalar()
+            return bool(result.scalar())
         except Exception as e:
             logger.error(f"Failed to check member overlap: {e}")
             raise e
@@ -405,7 +409,7 @@ class TeamContestDAO:
                 ),
             )
             result = await self._session.execute(select(stmt))
-            return result.scalar()
+            return bool(result.scalar())
         except Exception as e:
             logger.error(f"Failed to check active contest for team {team_id}: {e}")
             raise e
@@ -421,7 +425,7 @@ class TeamContestDAO:
                 .where(TeamContest.contest_id == contest_id)
                 .order_by(Team.name)
             )
-            return list(result.all())
+            return [(row[0], row[1]) for row in result.all()]
         except Exception as e:
             logger.error(f"Failed to get registered teams for contest {contest_id}: {e}")
             raise e

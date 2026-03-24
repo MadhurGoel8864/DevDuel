@@ -55,6 +55,7 @@ class ContestEditRequest(BaseSchema):
 class TeamContestResponseData(BaseSchema, ISTDatetimeMixin):
     id: str
     team_id: str
+    team_name: str = ""
     contest_id: str
     currency: int
     score: int
