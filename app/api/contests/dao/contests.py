@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Depends
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -57,34 +57,72 @@ class ContestDAO:
             logger.error(f"Failed to get contest by id {contest_id}: {e}")
             raise e
 
-    async def get_created_by(self, user_id: str) -> list[Contest]:
-        """Return all contests created by the given user."""
+    async def get_created_by(self, user_id: str, skip: int = 0, limit: int = 20) -> list[Contest]:
+        """Return contests created by the given user, paginated."""
         try:
             result = await self._session.execute(
-                select(Contest).where(Contest.created_by == user_id)
+                select(Contest)
+                .where(Contest.created_by == user_id)
+                .order_by(Contest.created_at.desc())
+                .offset(skip)
+                .limit(limit)
             )
             return list(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to get contests created by user {user_id}: {e}")
             raise e
 
-    async def get_all(self) -> list[Contest]:
+    async def count_created_by(self, user_id: str) -> int:
         try:
-            result = await self._session.execute(select(Contest))
+            result = await self._session.execute(
+                select(func.count()).select_from(Contest).where(Contest.created_by == user_id)
+            )
+            return result.scalar_one()
+        except Exception as e:
+            logger.error(f"Failed to count contests created by user {user_id}: {e}")
+            raise e
+
+    async def get_all(self, skip: int = 0, limit: int = 20) -> list[Contest]:
+        try:
+            result = await self._session.execute(
+                select(Contest).order_by(Contest.created_at.desc()).offset(skip).limit(limit)
+            )
             return list(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to get all contests: {e}")
             raise e
 
-    async def get_active(self) -> list[Contest]:
+    async def count_all(self) -> int:
+        try:
+            result = await self._session.execute(select(func.count()).select_from(Contest))
+            return result.scalar_one()
+        except Exception as e:
+            logger.error(f"Failed to count all contests: {e}")
+            raise e
+
+    async def get_active(self, skip: int = 0, limit: int = 20) -> list[Contest]:
         """Return only contests with ACTIVE status."""
         try:
             result = await self._session.execute(
-                select(Contest).where(Contest.status == ContestStatus.ACTIVE)
+                select(Contest)
+                .where(Contest.status == ContestStatus.ACTIVE)
+                .order_by(Contest.created_at.desc())
+                .offset(skip)
+                .limit(limit)
             )
             return list(result.scalars().all())
         except Exception as e:
             logger.error(f"Failed to get active contests: {e}")
+            raise e
+
+    async def count_active(self) -> int:
+        try:
+            result = await self._session.execute(
+                select(func.count()).select_from(Contest).where(Contest.status == ContestStatus.ACTIVE)
+            )
+            return result.scalar_one()
+        except Exception as e:
+            logger.error(f"Failed to count active contests: {e}")
             raise e
 
     async def update_status(
@@ -334,6 +372,21 @@ class TeamContestDAO:
             return result.scalar()
         except Exception as e:
             logger.error(f"Failed to check active contest for team {team_id}: {e}")
+            raise e
+
+    async def count_teams_per_contest(self, contest_ids: list[str]) -> dict[str, int]:
+        """Return {contest_id: team_count} for the given contest IDs. Missing IDs → 0."""
+        if not contest_ids:
+            return {}
+        try:
+            result = await self._session.execute(
+                select(TeamContest.contest_id, func.count(TeamContest.team_id))
+                .where(TeamContest.contest_id.in_(contest_ids))
+                .group_by(TeamContest.contest_id)
+            )
+            return dict(result.all())
+        except Exception as e:
+            logger.error(f"Failed to count teams per contest: {e}")
             raise e
 
     async def get_registered_team_ids(self, contest_id: str) -> list[str]:

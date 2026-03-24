@@ -85,6 +85,7 @@ class ContestSummaryData(BaseSchema, ISTDatetimeMixin):
     status: ContestStatus
     created_by: str
     created_at: datetime
+    teams_joined_count: int = 0
 
 
 # ── Leaderboard / Team-in-Contest Schemas ────────────────────────────────────

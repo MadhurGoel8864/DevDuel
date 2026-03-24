@@ -179,8 +179,8 @@ class TeamInviteService:
             "invitee_name": invitee_name,
             "inviter_email": inviter_email,
             "inviter_name": inviter_name,
-            "accept_url": f"{settings.FRONTEND_ACCEPT_INVITE_URL}?token={token}",
-            "decline_url": f"{settings.FRONTEND_DECLINE_INVITE_URL}?token={token}",
+            "accept_url": f"{settings.FRONTEND_INVITE_URL}?token={token}",
+            "decline_url": f"{settings.FRONTEND_INVITE_URL}?token={token}",
             "register_url": f"{settings.FRONTEND_REGISTER_INVITE_URL}?invite={token}",
         }
 

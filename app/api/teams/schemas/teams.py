@@ -64,6 +64,7 @@ class TeamSummaryData(BaseSchema, ISTDatetimeMixin):
     name: str
     created_by: str
     created_at: datetime
+    member_count: int = 0
 
 
 # ── Status / Role / Can-Join Schemas ──────────────────────────────────────────

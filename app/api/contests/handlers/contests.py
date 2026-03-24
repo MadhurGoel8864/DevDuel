@@ -4,6 +4,8 @@ import logging
 
 from fastapi import BackgroundTasks, Body, Depends, Path
 
+from app.api.common.dependencies import PaginationParams, get_pagination
+
 from app.api.auth.dependencies import get_current_user, require_organizer
 from app.api.auth.schemas import UserWithPermissions
 from app.api.contests.schemas.contests import (
@@ -21,6 +23,7 @@ from app.api.contests.schemas.contests import (
 )
 from app.api.contests.services.contests import ContestService, get_contest_service
 from app.core.enums import ContestStatus
+from app.core.responses import MetaResponse
 from app.services.email import email_service
 from app.services.email.templates.contest_update import contest_update_template
 
@@ -113,33 +116,63 @@ async def edit_contest_handler(
 async def list_contests_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     contest_service: ContestService = Depends(get_contest_service),
+    pagination: PaginationParams = Depends(get_pagination),
 ) -> ContestListResponse:
-    """List all contests."""
-    contests = await contest_service.list_contests()
+    """List all contests (paginated)."""
+    contests, total = await contest_service.list_contests(
+        skip=pagination.skip, limit=pagination.limit
+    )
+    counts = await contest_service.get_teams_joined_counts([c.id for c in contests])
     return ContestListResponse(
-        data=[ContestSummaryData.model_validate(c) for c in contests]
+        data=[
+            ContestSummaryData.model_validate(c).model_copy(
+                update={"teams_joined_count": counts.get(c.id, 0)}
+            )
+            for c in contests
+        ],
+        meta=MetaResponse(page=pagination.page, limit=pagination.limit, total=total),
     )
 
 
 async def list_active_contests_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     contest_service: ContestService = Depends(get_contest_service),
+    pagination: PaginationParams = Depends(get_pagination),
 ) -> ContestListResponse:
-    """List all ACTIVE contests."""
-    contests = await contest_service.list_active_contests()
+    """List all ACTIVE contests (paginated)."""
+    contests, total = await contest_service.list_active_contests(
+        skip=pagination.skip, limit=pagination.limit
+    )
+    counts = await contest_service.get_teams_joined_counts([c.id for c in contests])
     return ContestListResponse(
-        data=[ContestSummaryData.model_validate(c) for c in contests]
+        data=[
+            ContestSummaryData.model_validate(c).model_copy(
+                update={"teams_joined_count": counts.get(c.id, 0)}
+            )
+            for c in contests
+        ],
+        meta=MetaResponse(page=pagination.page, limit=pagination.limit, total=total),
     )
 
 
 async def list_created_contests_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     contest_service: ContestService = Depends(get_contest_service),
+    pagination: PaginationParams = Depends(get_pagination),
 ) -> ContestListResponse:
-    """List all contests created by the authenticated user."""
-    contests = await contest_service.list_created_contests(user_id=current_user.user_id)
+    """List all contests created by the authenticated user (paginated)."""
+    contests, total = await contest_service.list_created_contests(
+        user_id=current_user.user_id, skip=pagination.skip, limit=pagination.limit
+    )
+    counts = await contest_service.get_teams_joined_counts([c.id for c in contests])
     return ContestListResponse(
-        data=[ContestSummaryData.model_validate(c) for c in contests]
+        data=[
+            ContestSummaryData.model_validate(c).model_copy(
+                update={"teams_joined_count": counts.get(c.id, 0)}
+            )
+            for c in contests
+        ],
+        meta=MetaResponse(page=pagination.page, limit=pagination.limit, total=total),
     )
 
 
@@ -174,11 +207,21 @@ async def register_team_handler(
 async def get_my_contests_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     contest_service: ContestService = Depends(get_contest_service),
+    pagination: PaginationParams = Depends(get_pagination),
 ) -> ContestListResponse:
-    """Get all contests that the authenticated user's teams are participating in."""
-    contests = await contest_service.get_my_contests(user_id=current_user.user_id)
+    """Get all contests that the authenticated user's teams are participating in (paginated)."""
+    contests, total = await contest_service.get_my_contests(
+        user_id=current_user.user_id, skip=pagination.skip, limit=pagination.limit
+    )
+    counts = await contest_service.get_teams_joined_counts([c.id for c in contests])
     return ContestListResponse(
-        data=[ContestSummaryData.model_validate(c) for c in contests]
+        data=[
+            ContestSummaryData.model_validate(c).model_copy(
+                update={"teams_joined_count": counts.get(c.id, 0)}
+            )
+            for c in contests
+        ],
+        meta=MetaResponse(page=pagination.page, limit=pagination.limit, total=total),
     )
 
 
