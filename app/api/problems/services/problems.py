@@ -1,253 +1,168 @@
 """Problem Service Layer"""
 
 import logging
-import re
 
 from fastapi import Depends
 
 from app.api.problems.dao.problems import (
     BuiltinProblemDAO,
     ContestProblemDAO,
-    ProblemDAO,
     get_builtin_problem_dao,
     get_contest_problem_dao,
-    get_problem_dao,
 )
 from app.core.enums import Difficulty
-from app.core.exceptions.common import BadRequestException
 from app.core.exceptions.contests import ContestNotFoundException
 from app.core.exceptions.problems import (
     BuiltinProblemNotFoundException,
+    ContestProblemNotFoundException,
     InvalidProblemOrderException,
+    NotContestOrganizerException,
     ProblemAlreadyInContestException,
-    ProblemNotFoundException,
 )
-from app.database.models.problems import BuiltinProblem, ContestProblem, Problem
+from app.database.models.contests import Contest
+from app.database.models.problems import BuiltinProblem, ContestProblem
 
 logger = logging.getLogger(__name__)
 
 
-def _generate_slug(title: str) -> str:
-    """Convert a title to a URL-safe slug.
+class BuiltinProblemService:
+    """Business logic for browsing built-in problems."""
 
-    Lowercases the title, strips leading/trailing whitespace, and replaces
-    runs of whitespace / non-alphanumeric characters with hyphens.
-    """
-    slug = title.strip().lower()
-    slug = re.sub(r"[^\w\s-]", "", slug)
-    slug = re.sub(r"[\s_]+", "-", slug)
-    slug = re.sub(r"-+", "-", slug)
-    return slug.strip("-")
+    def __init__(self, builtin_problem_dao: BuiltinProblemDAO):
+        self._builtin_dao = builtin_problem_dao
 
-
-class ProblemService:
-    """Business logic for Problem operations."""
-
-    def __init__(self, problem_dao: ProblemDAO):
-        self._problem_dao = problem_dao
-
-    async def _unique_slug(self, base_slug: str) -> str:
-        """Return a slug that doesn't already exist in the DB.
-
-        If ``base_slug`` is taken, try ``base_slug-2``, ``base_slug-3``, …
-        """
-        candidate = base_slug
-        counter = 2
-        while await self._problem_dao.slug_exists(candidate):
-            candidate = f"{base_slug}-{counter}"
-            counter += 1
-        return candidate
-
-    async def create_problem(
-        self,
-        title: str,
-        description: str,
-        difficulty: Difficulty,
-        points: int,
-        base_price: int,
-        created_by: str,
-        time_limit_ms: int = 2000,
-        memory_limit_mb: int = 256,
-    ) -> Problem:
-        """Create a new problem. Slug is auto-generated from the title."""
-        base_slug = _generate_slug(title)
-        slug = await self._unique_slug(base_slug)
-        problem = await self._problem_dao.create(
-            title=title,
-            slug=slug,
-            description=description,
-            difficulty=difficulty,
-            points=points,
-            base_price=base_price,
-            created_by=created_by,
-            time_limit_ms=time_limit_ms,
-            memory_limit_mb=memory_limit_mb,
-        )
-        logger.info(f"Problem '{title}' created with slug '{slug}' by {created_by}")
-        return problem
-
-    async def get_problem_by_id(self, problem_id: str) -> Problem:
-        """Raise ProblemNotFoundException if not found."""
-        problem = await self._problem_dao.get_by_id(problem_id)
-        if not problem:
-            raise ProblemNotFoundException(problem_id=problem_id)
-        return problem
-
-    async def get_problem_by_slug(self, slug: str) -> Problem:
-        """Raise ProblemNotFoundException if not found."""
-        problem = await self._problem_dao.get_by_slug(slug)
-        if not problem:
-            raise ProblemNotFoundException(
-                message=f"Problem with slug '{slug}' not found"
-            )
-        return problem
-
-    async def list_problems(
+    async def list_builtin_problems(
         self,
         difficulty: Difficulty | None = None,
         search: str | None = None,
-        created_by: str | None = None,
         page: int = 1,
-        limit: int = 20,
-    ) -> list[Problem]:
-        return await self._problem_dao.list_all(
+        limit: int = 10,
+    ) -> tuple[list[BuiltinProblem], int]:
+        """Return active built-in problems with optional filters and total count."""
+        problems = await self._builtin_dao.list_all(
             difficulty=difficulty,
             search=search,
-            created_by=created_by,
             page=page,
             limit=limit,
         )
+        total = await self._builtin_dao.count(
+            difficulty=difficulty,
+            search=search,
+        )
+        return problems, total
 
-    async def update_problem(
-        self,
-        problem_id: str,
-        requesting_user_id: str,
-        **fields,
-    ) -> Problem:
-        """Update problem fields. Only the creator may update.
-
-        Raises:
-            ProblemNotFoundException: If the problem does not exist.
-            BadRequestException: If the requester is not the creator.
-        """
-        problem = await self.get_problem_by_id(problem_id)
-        if problem.created_by != requesting_user_id:
-            raise BadRequestException(
-                message="Only the problem creator can update this problem"
-            )
-        updated = await self._problem_dao.update(problem, **fields)
-        logger.info(f"Problem {problem_id} updated by {requesting_user_id}")
-        return updated
-
-    async def soft_delete_problem(
-        self, problem_id: str, requesting_user_id: str
-    ) -> Problem:
-        """Soft-delete a problem (is_active=False). Only the creator may do this.
-
-        Raises:
-            ProblemNotFoundException: If the problem does not exist.
-            BadRequestException: If the requester is not the creator.
-        """
-        problem = await self.get_problem_by_id(problem_id)
-        if problem.created_by != requesting_user_id:
-            raise BadRequestException(
-                message="Only the problem creator can delete this problem"
-            )
-        deleted = await self._problem_dao.soft_delete(problem)
-        logger.info(f"Problem {problem_id} soft-deleted by {requesting_user_id}")
-        return deleted
+    async def get_builtin_problem_by_id(
+        self, problem_id: str
+    ) -> BuiltinProblem:
+        """Raise BuiltinProblemNotFoundException if not found."""
+        problem = await self._builtin_dao.get_by_id(problem_id)
+        if not problem or not problem.is_active:
+            raise BuiltinProblemNotFoundException(builtin_problem_id=problem_id)
+        return problem
 
 
 class ContestProblemService:
-    """Business logic for attaching Problems to Contests."""
+    """Business logic for managing contest problems."""
 
     def __init__(
         self,
-        problem_dao: ProblemDAO,
+        builtin_problem_dao: BuiltinProblemDAO,
         contest_problem_dao: ContestProblemDAO,
     ):
-        self._problem_dao = problem_dao
+        self._builtin_dao = builtin_problem_dao
         self._cp_dao = contest_problem_dao
 
-    async def _assert_contest_exists(self, contest_id: str) -> None:
+    async def _get_contest_or_404(self, contest_id: str) -> Contest:
         """Raise ContestNotFoundException if the contest does not exist."""
-        if not await self._cp_dao.contest_exists(contest_id):
+        contest = await self._cp_dao.get_contest(contest_id)
+        if not contest:
             raise ContestNotFoundException(contest_id=contest_id)
+        return contest
 
-    async def add_problem_to_contest(
+    async def _assert_organizer(
+        self, contest: Contest, requesting_user_id: str
+    ) -> None:
+        """Raise NotContestOrganizerException if not the contest creator."""
+        if contest.created_by != requesting_user_id:
+            raise NotContestOrganizerException(
+                message="Only the contest organizer can perform this action"
+            )
+
+    async def import_builtin_problem_to_contest(
         self,
+        builtin_problem_id: str,
         contest_id: str,
-        problem_id: str,
-        problem_order: int,
         requesting_user_id: str,
+        problem_order: int | None = None,
     ) -> ContestProblem:
-        """Attach a problem to a contest in a specific bidding order.
+        """Import a built-in problem into a contest.
 
-        Validates:
-            * contest exists
-            * problem exists and is active
-            * problem not already in contest
-            * problem_order >= 1
-            * order unique within contest
-
-        Raises:
-            ContestNotFoundException, ProblemNotFoundException,
-            ProblemAlreadyInContestException, InvalidProblemOrderException.
+        Creates a contest_problems row referencing the builtin problem directly,
+        copying default values for difficulty/points/base_price/time_limit/memory_limit.
+        If problem_order is not provided, auto-assigns the next available order.
         """
-        await self._assert_contest_exists(contest_id)
+        # 1. Validate contest and authorization
+        contest = await self._get_contest_or_404(contest_id)
+        await self._assert_organizer(contest, requesting_user_id)
 
-        problem = await self._problem_dao.get_by_id(problem_id)
-        if not problem or not problem.is_active:
-            raise ProblemNotFoundException(problem_id=problem_id)
+        # 2. Validate builtin problem
+        builtin = await self._builtin_dao.get_by_id(builtin_problem_id)
+        if not builtin or not builtin.is_active:
+            raise BuiltinProblemNotFoundException(
+                builtin_problem_id=builtin_problem_id
+            )
 
-        if problem_order < 1:
-            raise InvalidProblemOrderException(message="problem_order must be >= 1")
-
+        # 3. Check duplicate
         existing = await self._cp_dao.get_by_contest_and_problem(
-            contest_id=contest_id, problem_id=problem_id
+            contest_id=contest_id, problem_id=builtin_problem_id
         )
         if existing:
             raise ProblemAlreadyInContestException(
-                problem_id=problem_id, contest_id=contest_id
+                problem_id=builtin_problem_id, contest_id=contest_id
             )
 
-        order_conflict = await self._cp_dao.get_by_contest_and_order(
-            contest_id=contest_id, problem_order=problem_order
-        )
-        if order_conflict:
-            raise InvalidProblemOrderException(
-                message=f"problem_order {problem_order} is already taken in this contest"
+        # 4. Resolve problem_order: auto-assign if not provided
+        if problem_order is None:
+            max_order = await self._cp_dao.get_max_order(contest_id)
+            problem_order = max_order + 1
+        else:
+            if problem_order < 1:
+                raise InvalidProblemOrderException(
+                    message="problem_order must be >= 1"
+                )
+            order_conflict = await self._cp_dao.get_by_contest_and_order(
+                contest_id=contest_id, problem_order=problem_order
             )
+            if order_conflict:
+                raise InvalidProblemOrderException(
+                    message=f"problem_order {problem_order} is already taken in this contest"
+                )
 
+        # 5. Create contest problem with defaults from builtin
         cp = await self._cp_dao.add(
             contest_id=contest_id,
-            problem_id=problem_id,
+            problem_id=builtin_problem_id,
             problem_order=problem_order,
+            difficulty=builtin.difficulty,
+            points=builtin.points,
+            base_price=builtin.base_price,
+            time_limit_ms=builtin.time_limit_ms,
+            memory_limit_mb=builtin.memory_limit_mb,
         )
         logger.info(
-            f"Problem {problem_id} added to contest {contest_id} "
+            f"Builtin problem {builtin_problem_id} imported into contest {contest_id} "
             f"at order {problem_order} by {requesting_user_id}"
         )
         return cp
 
-    async def list_contest_problems(self, contest_id: str) -> list[ContestProblem]:
+    async def list_contest_problems(
+        self, contest_id: str
+    ) -> list[ContestProblem]:
         """Return active contest-problems sorted by problem_order."""
-        await self._assert_contest_exists(contest_id)
+        contest = await self._cp_dao.get_contest(contest_id)
+        if not contest:
+            raise ContestNotFoundException(contest_id=contest_id)
         return await self._cp_dao.list_by_contest(contest_id)
-
-    async def get_contest_problem(
-        self, contest_id: str, contest_problem_id: str
-    ) -> ContestProblem:
-        """Fetch a specific ContestProblem by its own ID.
-
-        Raises ProblemNotFoundException if not found or not in the contest.
-        """
-        cp = await self._cp_dao.get_by_id(contest_problem_id)
-        if not cp or cp.contest_id != contest_id:
-            raise ProblemNotFoundException(
-                message=f"ContestProblem '{contest_problem_id}' not found in contest '{contest_id}'"
-            )
-        return cp
 
     async def remove_problem_from_contest(
         self,
@@ -255,153 +170,81 @@ class ContestProblemService:
         contest_problem_id: str,
         requesting_user_id: str,
     ) -> ContestProblem:
-        """Soft-delete a ContestProblem (is_active=False).
+        """Hard-delete a ContestProblem row."""
+        contest = await self._get_contest_or_404(contest_id)
+        await self._assert_organizer(contest, requesting_user_id)
 
-        Raises ProblemNotFoundException if not found.
-        """
-        cp = await self.get_contest_problem(contest_id, contest_problem_id)
-        removed = await self._cp_dao.soft_delete(cp)
-        logger.info(
-            f"ContestProblem {contest_problem_id} removed from contest {contest_id} "
-            f"by {requesting_user_id}"
-        )
-        return removed
-
-
-class BuiltinProblemService:
-    """Business logic for browsing and importing built-in problems."""
-
-    def __init__(
-        self,
-        builtin_problem_dao: BuiltinProblemDAO,
-        problem_dao: ProblemDAO,
-        contest_problem_dao: ContestProblemDAO,
-    ):
-        self._builtin_dao = builtin_problem_dao
-        self._problem_dao = problem_dao
-        self._cp_dao = contest_problem_dao
-
-    async def list_builtin_problems(
-        self,
-        difficulty: Difficulty | None = None,
-        search: str | None = None,
-        page: int = 1,
-        limit: int = 20,
-    ) -> list[BuiltinProblem]:
-        """Return active built-in problems with optional filters."""
-        return await self._builtin_dao.list_all(
-            difficulty=difficulty,
-            search=search,
-            page=page,
-            limit=limit,
-        )
-
-    async def import_builtin_problem_to_contest(
-        self,
-        builtin_problem_id: str,
-        contest_id: str,
-        problem_order: int,
-        requesting_user_id: str,
-    ) -> ContestProblem:
-        """Clone a built-in problem into a user-owned Problem and attach it to a contest.
-
-        Steps:
-            1. Validate the builtin problem exists and is active.
-            2. Validate the contest exists.
-            3. Validate problem_order uniqueness within the contest.
-            4. Create a new Problem (owned by the requesting user).
-            5. Attach the new Problem to the contest via ContestProblem.
-
-        Raises:
-            BuiltinProblemNotFoundException, ContestNotFoundException,
-            InvalidProblemOrderException, ProblemAlreadyInContestException.
-        """
-        # 1. Validate built-in problem
-        builtin = await self._builtin_dao.get_by_id(builtin_problem_id)
-        if not builtin or not builtin.is_active:
-            raise BuiltinProblemNotFoundException(builtin_problem_id=builtin_problem_id)
-
-        # 2. Validate contest exists
-        if not await self._cp_dao.contest_exists(contest_id):
-            raise ContestNotFoundException(contest_id=contest_id)
-
-        # 3. Validate problem_order
-        if problem_order < 1:
-            raise InvalidProblemOrderException(message="problem_order must be >= 1")
-
-        order_conflict = await self._cp_dao.get_by_contest_and_order(
-            contest_id=contest_id, problem_order=problem_order
-        )
-        if order_conflict:
-            raise InvalidProblemOrderException(
-                message=f"problem_order {problem_order} is already taken in this contest"
+        cp = await self._cp_dao.get_by_id(contest_problem_id)
+        if not cp or cp.contest_id != contest_id:
+            raise ContestProblemNotFoundException(
+                contest_problem_id=contest_problem_id
             )
 
-        # 4. Clone the built-in problem into a user-owned Problem row
-        base_slug = _generate_slug(builtin.title)
-        # Re-use ProblemService._unique_slug logic inline
-        candidate = base_slug
-        counter = 2
-        while await self._problem_dao.slug_exists(candidate):
-            candidate = f"{base_slug}-{counter}"
-            counter += 1
-        slug = candidate
+        await self._cp_dao.delete(cp)
 
-        new_problem = await self._problem_dao.create(
-            title=builtin.title,
-            slug=slug,
-            description=builtin.description,
-            difficulty=builtin.difficulty,
-            points=builtin.points,
-            base_price=builtin.base_price,
-            created_by=requesting_user_id,
-            time_limit_ms=builtin.time_limit_ms,
-            memory_limit_mb=builtin.memory_limit_mb,
-        )
-        logger.info(
-            f"Builtin problem '{builtin.title}' cloned as Problem {new_problem.id} "
-            f"by user {requesting_user_id}"
-        )
+        # Resequence remaining problems to close order gaps
+        await self._cp_dao.resequence_orders(contest_id)
 
-        # 5. Attach new problem to contest
-        cp = await self._cp_dao.add(
-            contest_id=contest_id,
-            problem_id=new_problem.id,
-            problem_order=problem_order,
-        )
         logger.info(
-            f"Cloned problem {new_problem.id} attached to contest {contest_id} "
-            f"at order {problem_order} by {requesting_user_id}"
+            f"ContestProblem {contest_problem_id} deleted from contest {contest_id} "
+            f"by {requesting_user_id}"
         )
         return cp
+
+    async def update_contest_problem(
+        self,
+        contest_id: str,
+        contest_problem_id: str,
+        requesting_user_id: str,
+        **fields,
+    ) -> ContestProblem:
+        """Update contest-specific overrides for a problem.
+
+        Allowed fields: difficulty, points, base_price, time_limit_ms,
+        memory_limit_mb, problem_order.
+        """
+        contest = await self._get_contest_or_404(contest_id)
+        await self._assert_organizer(contest, requesting_user_id)
+
+        cp = await self._cp_dao.get_by_id(contest_problem_id)
+        if not cp or cp.contest_id != contest_id or not cp.is_active:
+            raise ContestProblemNotFoundException(
+                contest_problem_id=contest_problem_id
+            )
+
+        # If problem_order is being changed, check for conflicts
+        new_order = fields.get("problem_order")
+        if new_order is not None and new_order != cp.problem_order:
+            order_conflict = await self._cp_dao.get_by_contest_and_order(
+                contest_id=contest_id, problem_order=new_order
+            )
+            if order_conflict:
+                raise InvalidProblemOrderException(
+                    message=f"problem_order {new_order} is already taken in this contest"
+                )
+
+        updated = await self._cp_dao.update(cp, **fields)
+        logger.info(
+            f"ContestProblem {contest_problem_id} updated in contest {contest_id} "
+            f"by {requesting_user_id}"
+        )
+        return updated
 
 
 # ── Dependencies ────────────────────────────────────────────────────────────────
 
 
-async def get_problem_service(
-    problem_dao: ProblemDAO = Depends(get_problem_dao),
-) -> ProblemService:
-    return ProblemService(problem_dao=problem_dao)
+async def get_builtin_problem_service(
+    builtin_problem_dao: BuiltinProblemDAO = Depends(get_builtin_problem_dao),
+) -> BuiltinProblemService:
+    return BuiltinProblemService(builtin_problem_dao=builtin_problem_dao)
 
 
 async def get_contest_problem_service(
-    problem_dao: ProblemDAO = Depends(get_problem_dao),
+    builtin_problem_dao: BuiltinProblemDAO = Depends(get_builtin_problem_dao),
     contest_problem_dao: ContestProblemDAO = Depends(get_contest_problem_dao),
 ) -> ContestProblemService:
     return ContestProblemService(
-        problem_dao=problem_dao,
-        contest_problem_dao=contest_problem_dao,
-    )
-
-
-async def get_builtin_problem_service(
-    builtin_problem_dao: BuiltinProblemDAO = Depends(get_builtin_problem_dao),
-    problem_dao: ProblemDAO = Depends(get_problem_dao),
-    contest_problem_dao: ContestProblemDAO = Depends(get_contest_problem_dao),
-) -> BuiltinProblemService:
-    return BuiltinProblemService(
         builtin_problem_dao=builtin_problem_dao,
-        problem_dao=problem_dao,
         contest_problem_dao=contest_problem_dao,
     )
