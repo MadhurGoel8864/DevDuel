@@ -24,6 +24,8 @@ from app.api.contests.schemas.contests import (
     TeamContestDetailData,
     TeamContestDetailResponse,
     TeamContestResponseData,
+    UserRegistrationCheckData,
+    UserRegistrationCheckResponse,
 )
 from app.api.contests.services.contests import ContestService, get_contest_service
 from app.core.enums import ContestStatus
@@ -275,6 +277,25 @@ async def get_contest_leaderboard_handler(
             )
             for rank, tc in ranked
         ]
+    )
+
+
+async def check_user_registration_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    user_id: str = Path(..., description="User ID"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    contest_service: ContestService = Depends(get_contest_service),
+) -> UserRegistrationCheckResponse:
+    """Check whether a user is registered in a contest (via any team)."""
+    is_registered = await contest_service.is_user_registered(
+        contest_id=contest_id, user_id=user_id
+    )
+    return UserRegistrationCheckResponse(
+        data=UserRegistrationCheckData(
+            contest_id=contest_id,
+            user_id=user_id,
+            is_registered=is_registered,
+        )
     )
 
 

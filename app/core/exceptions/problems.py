@@ -73,3 +73,38 @@ class BuiltinProblemNotFoundException(AppException):
             status_code=404,
             details=details,
         )
+
+
+class ContestProblemNotFoundException(AppException):
+    """Raised when a contest problem is not found. HTTP 404."""
+
+    def __init__(
+        self,
+        contest_problem_id: Optional[str] = None,
+        message: Optional[str] = None,
+    ):
+        details = (
+            {"contest_problem_id": contest_problem_id} if contest_problem_id else None
+        )
+        super().__init__(
+            code="CONTEST_PROBLEM_NOT_FOUND",
+            message=message
+            or (
+                f"Contest problem with ID '{contest_problem_id}' not found"
+                if contest_problem_id
+                else "Contest problem not found"
+            ),
+            status_code=404,
+            details=details,
+        )
+
+
+class NotContestOrganizerException(AppException):
+    """Raised when a non-organizer tries to modify contest problems. HTTP 403."""
+
+    def __init__(self, message: Optional[str] = None):
+        super().__init__(
+            code="NOT_CONTEST_ORGANIZER",
+            message=message or "Only the contest organizer can perform this action",
+            status_code=403,
+        )

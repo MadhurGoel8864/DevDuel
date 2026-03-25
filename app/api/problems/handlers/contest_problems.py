@@ -7,37 +7,46 @@ from fastapi import Body, Depends, Path
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
 from app.api.problems.schemas.problems import (
-    ContestProblemCreateRequest,
+    BuiltinProblemResponseData,
     ContestProblemListResponse,
     ContestProblemResponse,
     ContestProblemResponseData,
+    ContestProblemUpdateRequest,
     ImportBuiltinProblemRequest,
-    ProblemResponseData,
 )
 from app.api.problems.services.problems import (
-    BuiltinProblemService,
     ContestProblemService,
-    get_builtin_problem_service,
     get_contest_problem_service,
 )
 
 logger = logging.getLogger(__name__)
 
 
-async def add_problem_to_contest_handler(
+async def import_builtin_problem_handler(
     contest_id: str = Path(..., description="Contest ID"),
-    request: ContestProblemCreateRequest = Body(...),
+    request: ImportBuiltinProblemRequest = Body(...),
     current_user: UserWithPermissions = Depends(get_current_user),
     cp_service: ContestProblemService = Depends(get_contest_problem_service),
 ) -> ContestProblemResponse:
-    """Attach a problem to a contest at a specific bidding order."""
-    cp = await cp_service.add_problem_to_contest(
+    """Import a built-in problem into a contest.
+
+    Creates a contest_problems row referencing the builtin problem directly,
+    inheriting its default values for difficulty/points/base_price/time_limit/memory_limit.
+    """
+    cp = await cp_service.import_builtin_problem_to_contest(
+        builtin_problem_id=request.data.builtin_problem_id,
         contest_id=contest_id,
-        problem_id=request.data.problem_id,
-        problem_order=request.data.problem_order,
         requesting_user_id=current_user.user_id,
+        problem_order=request.data.problem_order,
     )
-    return ContestProblemResponse(data=ContestProblemResponseData.model_validate(cp))
+    data = ContestProblemResponseData.model_validate(cp)
+    if cp.problem:
+        data.problem = BuiltinProblemResponseData.model_validate(cp.problem)
+    logger.info(
+        f"Builtin problem {request.data.builtin_problem_id} imported into "
+        f"contest {contest_id} by {current_user.user_id}"
+    )
+    return ContestProblemResponse(data=data)
 
 
 async def list_contest_problems_handler(
@@ -51,7 +60,7 @@ async def list_contest_problems_handler(
     for cp in cps:
         item = ContestProblemResponseData.model_validate(cp)
         if cp.problem:
-            item.problem = ProblemResponseData.model_validate(cp.problem)
+            item.problem = BuiltinProblemResponseData.model_validate(cp.problem)
         response_items.append(item)
     return ContestProblemListResponse(data=response_items)
 
@@ -62,40 +71,46 @@ async def remove_problem_from_contest_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     cp_service: ContestProblemService = Depends(get_contest_problem_service),
 ) -> ContestProblemResponse:
-    """Soft-delete a ContestProblem (is_active=False)."""
+    """Hard-delete a ContestProblem row from the contest."""
     cp = await cp_service.remove_problem_from_contest(
         contest_id=contest_id,
         contest_problem_id=contest_problem_id,
         requesting_user_id=current_user.user_id,
     )
+    data = ContestProblemResponseData.model_validate(cp)
+    if cp.problem:
+        data.problem = BuiltinProblemResponseData.model_validate(cp.problem)
     logger.info(
         f"ContestProblem {contest_problem_id} removed from contest {contest_id} "
         f"by {current_user.user_id}"
     )
-    return ContestProblemResponse(data=ContestProblemResponseData.model_validate(cp))
+    return ContestProblemResponse(data=data)
 
 
-async def import_builtin_problem_handler(
+async def update_contest_problem_handler(
     contest_id: str = Path(..., description="Contest ID"),
-    request: ImportBuiltinProblemRequest = Body(...),
+    contest_problem_id: str = Path(..., description="ContestProblem ID"),
+    request: ContestProblemUpdateRequest = Body(...),
     current_user: UserWithPermissions = Depends(get_current_user),
-    builtin_service: BuiltinProblemService = Depends(get_builtin_problem_service),
+    cp_service: ContestProblemService = Depends(get_contest_problem_service),
 ) -> ContestProblemResponse:
-    """Import a built-in problem into a contest.
+    """Update contest-specific overrides for a problem.
 
-    Clones the platform problem into a user-owned Problem row and attaches
-    it to the contest as a ContestProblem with the given problem_order.
-    The creator can later update the problem's title/description/etc via
-    the standard PUT /problems/{problem_id} endpoint.
+    Organizer can change difficulty, points, base_price, time_limit_ms,
+    memory_limit_mb, and problem_order. Title, slug, description cannot be changed.
     """
-    cp = await builtin_service.import_builtin_problem_to_contest(
-        builtin_problem_id=request.data.builtin_problem_id,
+    update_data = request.data.model_dump(exclude_none=True)
+    cp = await cp_service.update_contest_problem(
         contest_id=contest_id,
-        problem_order=request.data.problem_order,
+        contest_problem_id=contest_problem_id,
         requesting_user_id=current_user.user_id,
+        **update_data,
     )
+    data = ContestProblemResponseData.model_validate(cp)
+    if cp.problem:
+        data.problem = BuiltinProblemResponseData.model_validate(cp.problem)
     logger.info(
-        f"Builtin problem {request.data.builtin_problem_id} imported into "
-        f"contest {contest_id} by {current_user.user_id}"
+        f"ContestProblem {contest_problem_id} updated in contest {contest_id} "
+        f"by {current_user.user_id}"
     )
-    return ContestProblemResponse(data=ContestProblemResponseData.model_validate(cp))
+    return ContestProblemResponse(data=data)

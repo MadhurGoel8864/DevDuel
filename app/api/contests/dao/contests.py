@@ -443,6 +443,22 @@ class TeamContestDAO:
             )
             raise e
 
+    async def is_user_in_contest(self, contest_id: str, user_id: str) -> bool:
+        """Check if a user is registered in a contest via any team."""
+        try:
+            stmt = exists().where(
+                TeamContest.contest_id == contest_id,
+                TeamMember.team_id == TeamContest.team_id,
+                TeamMember.user_id == user_id,
+            )
+            result = await self._session.execute(select(stmt))
+            return bool(result.scalar())
+        except Exception as e:
+            logger.error(
+                f"Failed to check if user {user_id} is in contest {contest_id}: {e}"
+            )
+            raise e
+
     async def get_contest_user_ids(self, contest_id: str) -> set[str]:
         """Return all user_ids across all teams registered for a contest."""
         try:

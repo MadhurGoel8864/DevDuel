@@ -7,7 +7,6 @@ from app.api.auth.routes import AuthRouter, OAuthRouter
 from app.api.bidding.routes.bidding import router as bidding_router
 from app.api.contests.routes.contests import router as contests_router
 from app.api.problems.routes.problems import (
-    builtin_problems_router,
     contest_problems_router,
     problems_router,
 )
@@ -39,5 +38,4 @@ api_router.include_router(OAuthRouter)
 api_router.include_router(teams_router)
 api_router.include_router(contests_router)
 api_router.include_router(problems_router)
-api_router.include_router(builtin_problems_router)
 api_router.include_router(contest_problems_router)

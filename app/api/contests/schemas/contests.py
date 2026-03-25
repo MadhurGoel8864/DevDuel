@@ -139,6 +139,17 @@ class LeaderboardEntryData(BaseSchema):
     currency: int
 
 
+# ── User Registration Check ───────────────────────────────────────────────────
+
+
+class UserRegistrationCheckData(BaseSchema):
+    """Whether a user is registered in a contest."""
+
+    contest_id: str
+    user_id: str
+    is_registered: bool
+
+
 # ── Final Response Aliases ─────────────────────────────────────────────────────
 
 ContestRegisteredTeamsResponse = APIResponse[list[RegisteredTeamData]]
@@ -147,3 +158,4 @@ ContestListResponse = APIResponse[list[ContestSummaryData]]
 ContestPaginatedListResponse = PaginatedResponse[ContestSummaryData]
 TeamContestDetailResponse = APIResponse[TeamContestDetailData]
 LeaderboardResponse = APIResponse[list[LeaderboardEntryData]]
+UserRegistrationCheckResponse = APIResponse[UserRegistrationCheckData]

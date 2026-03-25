@@ -444,6 +444,11 @@ class ContestService:
     ) -> Optional[TeamContest]:
         return await self._team_contest_dao.get(team_id=team_id, contest_id=contest_id)
 
+    async def is_user_registered(self, contest_id: str, user_id: str) -> bool:
+        """Check if a user is registered in a contest via any team."""
+        await self.get_contest(contest_id)  # validates contest exists
+        return await self._team_contest_dao.is_user_in_contest(contest_id, user_id)
+
     async def get_contest_member_user_ids(self, contest_id: str) -> set[str]:
         return await self._team_contest_dao.get_contest_user_ids(contest_id)
 
