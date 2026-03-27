@@ -23,6 +23,7 @@ from app.core.exceptions.auth import (
     InvalidTokenTypeException,
     UnauthorizedException,
 )
+from app.core.config import settings
 from app.core.redis import get_redis_client
 from app.core.security.jwt import (
     InvalidTokenError,
@@ -184,21 +185,29 @@ class AuthService:
                 email=email,
             )
 
-        # Retrieve OTP from Redis using user ID as key
-        redis_key = f"otp:user:{user.id}"
-        stored_otp = await self._redis.get(redis_key)
-
-        # Validate OTP exists in Redis
-        if not stored_otp:
+        # Allow dummy OTP in non-production environments for easier testing
+        DUMMY_OTP = "0000"
+        if settings.env != "production" and otp == DUMMY_OTP:
             logger.warning(
-                f"OTP verification failed: OTP expired or not found for {email}"
+                f"Dummy OTP accepted for {email} (env={settings.env}). "
+                "This is NOT allowed in production."
             )
-            raise UnauthorizedException(message="OTP has expired or does not exist")
+        else:
+            # Retrieve OTP from Redis using user ID as key
+            redis_key = f"otp:user:{user.id}"
+            stored_otp = await self._redis.get(redis_key)
 
-        # Validate OTP matches
-        if stored_otp != otp:
-            logger.warning(f"OTP verification failed: Invalid OTP for {email}")
-            raise UnauthorizedException(message="Invalid OTP")
+            # Validate OTP exists in Redis
+            if not stored_otp:
+                logger.warning(
+                    f"OTP verification failed: OTP expired or not found for {email}"
+                )
+                raise UnauthorizedException(message="OTP has expired or does not exist")
+
+            # Validate OTP matches
+            if stored_otp != otp:
+                logger.warning(f"OTP verification failed: Invalid OTP for {email}")
+                raise UnauthorizedException(message="Invalid OTP")
 
         # Update user verification status
         verified_user = await self._user_dao.verify_user(email)
