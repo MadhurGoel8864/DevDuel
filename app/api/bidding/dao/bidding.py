@@ -81,6 +81,21 @@ class BiddingDAO:
             logger.error(f"Failed to get active auction for contest {contest_id}: {e}")
             raise
 
+    async def get_all_auctions_for_contest(
+        self, contest_id: str
+    ) -> list[ProblemAuction]:
+        """Return all auctions for a contest, ordered by created_at ASC."""
+        try:
+            result = await self._session.execute(
+                select(ProblemAuction)
+                .where(ProblemAuction.contest_id == contest_id)
+                .order_by(ProblemAuction.created_at.asc())
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"Failed to get all auctions for contest {contest_id}: {e}")
+            raise
+
     async def get_latest_auction_for_contest(
         self, contest_id: str
     ) -> Optional[ProblemAuction]:

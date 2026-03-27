@@ -1,7 +1,7 @@
 """Bidding API Pydantic Schemas"""
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -90,4 +90,5 @@ class AssignmentResponseData(BaseSchema):
 # ── Response Aliases ───────────────────────────────────────────────────────────
 
 AuctionResponse = APIResponse[AuctionResponseData]
+AuctionListResponse = APIResponse[List[AuctionResponseData]]
 AuctionResultResponse = APIResponse[AuctionResultData]

@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, WebSocket
 
 from app.api.bidding.handlers.bidding import (
+    get_all_auctions_handler,
     get_auction_result_handler,
     get_current_auction_handler,
     start_auction_handler,
@@ -21,6 +22,14 @@ router.add_api_route(
     status_code=201,
     summary="Start Auction",
     description="Start an auction for the next problem in an ACTIVE contest.",
+)
+
+router.add_api_route(
+    "/contests/{contest_id}/auctions",
+    get_all_auctions_handler,
+    methods=["GET"],
+    summary="List All Auctions",
+    description="Return all auctions for a contest, ordered by created_at ascending.",
 )
 
 router.add_api_route(

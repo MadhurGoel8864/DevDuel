@@ -202,6 +202,20 @@ class BiddingService:
         except Exception as exc:
             logger.error(f"Auto-finish failed for auction {auction_id}: {exc}")
 
+    # ── List All Auctions ──────────────────────────────────────────────────────
+
+    async def get_all_auctions(self, contest_id: str) -> list[ProblemAuction]:
+        """
+        Return all auctions for a contest, ordered by created_at ASC.
+
+        Raises:
+            ContestNotFoundException: If the contest does not exist.
+        """
+        contest = await self._contest_dao.get_by_id(contest_id)
+        if not contest:
+            raise ContestNotFoundException(contest_id=contest_id)
+        return await self._dao.get_all_auctions_for_contest(contest_id)
+
     # ── Get Current Auction ────────────────────────────────────────────────────
 
     async def get_current_auction(self, contest_id: str) -> ProblemAuction:

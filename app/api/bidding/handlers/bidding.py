@@ -7,6 +7,7 @@ from fastapi import Body, Depends, Path
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
 from app.api.bidding.schemas.bidding import (
+    AuctionListResponse,
     AuctionResponse,
     AuctionResponseData,
     AuctionResultData,
@@ -51,6 +52,28 @@ async def start_auction_handler(
         f"end_time={auction.end_time}"
     )
     return AuctionResponse(data=AuctionResponseData.model_validate(auction))
+
+
+async def get_all_auctions_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    bidding_service: BiddingService = Depends(get_bidding_service),
+) -> AuctionListResponse:
+    """
+    Return all auctions for a contest, ordered by created_at ascending.
+    """
+    logger.debug(
+        f"[GET_ALL_AUCTIONS] user={current_user.user_id} | contest={contest_id}"
+    )
+
+    auctions = await bidding_service.get_all_auctions(contest_id=contest_id)
+
+    logger.debug(
+        f"[GET_ALL_AUCTIONS] Returning {len(auctions)} auctions for contest={contest_id}"
+    )
+    return AuctionListResponse(
+        data=[AuctionResponseData.model_validate(a) for a in auctions]
+    )
 
 
 async def get_current_auction_handler(
