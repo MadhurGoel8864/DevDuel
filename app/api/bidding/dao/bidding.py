@@ -248,6 +248,7 @@ class BiddingDAO:
         winning_bid: Optional[int],
         contest_id: str,
         contest_problem_id: str,
+        end_time: Optional[object] = None,
     ) -> Optional[ContestProblemAssignment]:
         """
         Finalize an auction in a single atomic transaction.
@@ -275,6 +276,8 @@ class BiddingDAO:
             auction.status = AuctionStatus.FINISHED
             auction.winning_team_id = winning_team_id
             auction.winning_bid = winning_bid
+            if end_time is not None:
+                auction.end_time = end_time
             self._session.add(auction)
 
             assignment: Optional[ContestProblemAssignment] = None

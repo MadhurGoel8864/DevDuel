@@ -49,7 +49,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 1000,
         "memory_limit_mb": 128,
         "description": (
-            "## Palindrome Number\n\n"
             "Given an integer `x`, return `true` if `x` is a **palindrome**, and `false` otherwise.\n\n"
             "An integer is a palindrome when it reads the same forward and backward.\n\n"
             "### Examples\n\n"
@@ -68,7 +67,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Best Time to Buy and Sell Stock\n\n"
             "You are given an array `prices` where `prices[i]` is the price of a given stock on the `i`-th day.\n\n"
             "You want to maximize your profit by choosing a **single day** to buy one stock and choosing a "
             "**different day in the future** to sell that stock.\n\n"
@@ -88,7 +86,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Merge Two Sorted Lists\n\n"
             "You are given the heads of two sorted linked lists `list1` and `list2`.\n\n"
             "Merge the two lists into one **sorted** list. The list should be made by splicing together "
             "the nodes of the first two lists.\n\n"
@@ -109,7 +106,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 1000,
         "memory_limit_mb": 128,
         "description": (
-            "## Maximum Depth of Binary Tree\n\n"
             "Given the `root` of a binary tree, return its **maximum depth**.\n\n"
             "A binary tree's maximum depth is the number of nodes along the longest path "
             "from the root node down to the farthest leaf node.\n\n"
@@ -128,7 +124,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 1000,
         "memory_limit_mb": 128,
         "description": (
-            "## Single Number\n\n"
             "Given a **non-empty** array of integers `nums`, every element appears *twice* except for one. "
             "Find that single one.\n\n"
             "You must implement a solution with linear runtime complexity and use only constant extra space.\n\n"
@@ -148,7 +143,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 1000,
         "memory_limit_mb": 128,
         "description": (
-            "## Contains Duplicate\n\n"
             "Given an integer array `nums`, return `true` if any value appears **at least twice** "
             "in the array, and return `false` if every element is distinct.\n\n"
             "### Examples\n\n"
@@ -168,7 +162,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 3000,
         "memory_limit_mb": 256,
         "description": (
-            "## 3Sum\n\n"
             "Given an integer array `nums`, return all the triplets `[nums[i], nums[j], nums[k]]` "
             "such that `i != j`, `i != k`, `j != k`, and `nums[i] + nums[j] + nums[k] == 0`.\n\n"
             "The solution set must **not contain duplicate triplets**.\n\n"
@@ -187,7 +180,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Product of Array Except Self\n\n"
             "Given an integer array `nums`, return an array `answer` such that `answer[i]` is equal to "
             "the product of all the elements of `nums` except `nums[i]`.\n\n"
             "The product of any prefix or suffix of `nums` is **guaranteed to fit** in a 32-bit integer.\n\n"
@@ -207,7 +199,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 3000,
         "memory_limit_mb": 256,
         "description": (
-            "## Longest Palindromic Substring\n\n"
             "Given a string `s`, return the **longest palindromic substring** in `s`.\n\n"
             "### Examples\n\n"
             '**Input:** `s = "babad"` → **Output:** `"bab"` (or `"aba"` is also valid)  \n'
@@ -225,7 +216,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Jump Game\n\n"
             "You are given an integer array `nums`. You are initially positioned at the array's "
             "**first index**, and each element in the array represents your maximum jump length at that position.\n\n"
             "Return `true` if you can reach the last index, or `false` otherwise.\n\n"
@@ -245,7 +235,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Find Minimum in Rotated Sorted Array\n\n"
             "Suppose an array of length `n` sorted in ascending order is **rotated** between `1` and `n` times.\n\n"
             "Given the sorted rotated array `nums` of **unique** elements, return the **minimum element** "
             "of this array.\n\n"
@@ -267,7 +256,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 3000,
         "memory_limit_mb": 256,
         "description": (
-            "## Subarray Sum Equals K\n\n"
             "Given an array of integers `nums` and an integer `k`, return the **total number of subarrays** "
             "whose sum equals to `k`.\n\n"
             "A subarray is a contiguous **non-empty** sequence of elements within an array.\n\n"
@@ -287,7 +275,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Decode Ways\n\n"
             "A message containing letters from `A-Z` can be **encoded** into numbers using the following mapping:\n\n"
             "```\n'A' -> \"1\", 'B' -> \"2\", ..., 'Z' -> \"26\"\n```\n\n"
             "Given a string `s` containing only digits, return the **number of ways** to decode it.\n\n"
@@ -308,7 +295,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 4000,
         "memory_limit_mb": 512,
         "description": (
-            "## Merge K Sorted Lists\n\n"
             "You are given an array of `k` linked-lists `lists`, each linked-list is sorted in ascending order.\n\n"
             "Merge all the linked-lists into one sorted linked-list and return it.\n\n"
             "### Example\n\n"
@@ -330,7 +316,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 4000,
         "memory_limit_mb": 256,
         "description": (
-            "## Minimum Window Substring\n\n"
             "Given two strings `s` and `t` of lengths `m` and `n` respectively, return the **minimum window "
             "substring** of `s` such that every character in `t` (including duplicates) is included in the window. "
             "If there is no such substring, return the empty string `\"\"`.\n\n"
@@ -350,7 +335,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 4000,
         "memory_limit_mb": 512,
         "description": (
-            "## Serialize and Deserialize Binary Tree\n\n"
             "Serialization is the process of converting a data structure or object into a sequence of bits "
             "so that it can be stored in a file or memory buffer, or transmitted across a network.\n\n"
             "Design an algorithm to **serialize** and **deserialize** a binary tree. There is no restriction "
@@ -372,7 +356,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 3000,
         "memory_limit_mb": 256,
         "description": (
-            "## Longest Consecutive Sequence\n\n"
             "Given an unsorted array of integers `nums`, return the length of the **longest consecutive "
             "elements sequence**.\n\n"
             "You must write an algorithm that runs in `O(n)` time.\n\n"
@@ -392,7 +375,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 5000,
         "memory_limit_mb": 256,
         "description": (
-            "## Regular Expression Matching\n\n"
             "Given an input string `s` and a pattern `p`, implement regular expression matching with "
             "support for `'.'` and `'*'` where:\n\n"
             "- `'.'` matches any single character.\n"
@@ -417,7 +399,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 5000,
         "memory_limit_mb": 512,
         "description": (
-            "## N-Queens\n\n"
             "The **n-queens** puzzle is the problem of placing `n` queens on an `n x n` chessboard such that "
             "no two queens attack each other.\n\n"
             "Given an integer `n`, return **all distinct solutions** to the n-queens puzzle. "
@@ -439,7 +420,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 4000,
         "memory_limit_mb": 256,
         "description": (
-            "## Alien Dictionary\n\n"
             "There is a new alien language that uses the English alphabet. However, the order among the "
             "letters is unknown to you.\n\n"
             "You are given a list of strings `words` from the alien language's dictionary, where the strings "

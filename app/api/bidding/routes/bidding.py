@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, WebSocket
 
 from app.api.bidding.handlers.bidding import (
+    force_end_auction_handler,
     get_all_auctions_handler,
     get_auction_result_handler,
     get_current_auction_handler,
@@ -46,6 +47,14 @@ router.add_api_route(
     methods=["GET"],
     summary="Get Auction Result",
     description="Return the final result of a finished auction.",
+)
+
+router.add_api_route(
+    "/auctions/{auction_id}/end",
+    force_end_auction_handler,
+    methods=["POST"],
+    summary="Force End Auction",
+    description="Immediately end an active auction. Organizer of the contest only.",
 )
 
 # ── WebSocket Endpoint ─────────────────────────────────────────────────────────

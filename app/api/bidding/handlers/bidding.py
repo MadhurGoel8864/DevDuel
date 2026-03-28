@@ -66,7 +66,10 @@ async def get_all_auctions_handler(
         f"[GET_ALL_AUCTIONS] user={current_user.user_id} | contest={contest_id}"
     )
 
-    auctions = await bidding_service.get_all_auctions(contest_id=contest_id)
+    auctions = await bidding_service.get_all_auctions(
+        contest_id=contest_id,
+        requesting_user_id=current_user.user_id,
+    )
 
     logger.debug(
         f"[GET_ALL_AUCTIONS] Returning {len(auctions)} auctions for contest={contest_id}"
@@ -123,3 +126,27 @@ async def get_auction_result_handler(
             status=auction.status,
         )
     )
+
+
+async def force_end_auction_handler(
+    auction_id: str = Path(..., description="Auction ID"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    bidding_service: BiddingService = Depends(get_bidding_service),
+) -> AuctionResponse:
+    """
+    Force-end an active auction immediately. Organizer of the contest only.
+    """
+    logger.info(
+        f"[FORCE_END_AUCTION] Requested by user={current_user.user_id} | auction={auction_id}"
+    )
+
+    auction = await bidding_service.force_end_auction(
+        auction_id=auction_id,
+        requesting_user_id=current_user.user_id,
+    )
+
+    logger.info(
+        f"[FORCE_END_AUCTION] Success — auction={auction.id} | "
+        f"winner={auction.winning_team_id!r} | winning_bid={auction.winning_bid!r}"
+    )
+    return AuctionResponse(data=AuctionResponseData.model_validate(auction))

@@ -186,7 +186,8 @@ class AuthService:
             )
 
         # Allow dummy OTP in non-production environments for easier testing
-        DUMMY_OTP = "0000"
+        DUMMY_OTP = "000000"
+        redis_key = None
         if settings.env != "production" and otp == DUMMY_OTP:
             logger.warning(
                 f"Dummy OTP accepted for {email} (env={settings.env}). "
@@ -216,7 +217,8 @@ class AuthService:
             raise UnauthorizedException(message="Failed to verify user")
 
         # Delete OTP from Redis after successful verification
-        await self._redis.delete(redis_key)
+        if redis_key:
+            await self._redis.delete(redis_key)
 
         logger.info(f"User {email} verified successfully")
 

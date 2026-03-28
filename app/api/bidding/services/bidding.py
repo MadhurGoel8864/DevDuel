@@ -24,6 +24,7 @@ from app.core.exceptions.bidding import (
     NotBidderRoleException,
     TeamNotInContestException,
 )
+from app.core.exceptions.auth import ForbiddenException
 from app.core.exceptions.contests import (
     ContestNotFoundException,
     RegistrationClosedException,
@@ -204,16 +205,30 @@ class BiddingService:
 
     # ── List All Auctions ──────────────────────────────────────────────────────
 
-    async def get_all_auctions(self, contest_id: str) -> list[ProblemAuction]:
+    async def get_all_auctions(
+        self, contest_id: str, requesting_user_id: str
+    ) -> list[ProblemAuction]:
         """
         Return all auctions for a contest, ordered by created_at ASC.
 
         Raises:
             ContestNotFoundException: If the contest does not exist.
+            ForbiddenException: If the user has no relation to this contest.
         """
         contest = await self._contest_dao.get_by_id(contest_id)
         if not contest:
             raise ContestNotFoundException(contest_id=contest_id)
+
+        is_organizer = contest.created_by == requesting_user_id
+        if not is_organizer:
+            in_contest = await self._contest_dao.is_user_in_contest(
+                contest_id, requesting_user_id
+            )
+            if not in_contest:
+                raise ForbiddenException(
+                    message="You do not have access to this contest's auctions"
+                )
+
         return await self._dao.get_all_auctions_for_contest(contest_id)
 
     # ── Get Current Auction ────────────────────────────────────────────────────
@@ -405,6 +420,91 @@ class BiddingService:
         )
 
         return assignment
+
+    # ── Force End Auction ──────────────────────────────────────────────────────
+
+    async def force_end_auction(
+        self, auction_id: str, requesting_user_id: str
+    ) -> ProblemAuction:
+        """
+        Immediately end an ACTIVE auction (organizer-only).
+
+        Steps:
+        1. Validate auction exists.
+        2. Validate caller is the contest organizer.
+        3. Validate auction is ACTIVE.
+        4. Read current highest bid from Redis.
+        5. Atomically finish the auction with end_time = now().
+        6. Clean up Redis keys.
+        7. Broadcast AUCTION_FINISHED via WebSocket.
+
+        Raises:
+            AuctionNotFoundException: Auction does not exist.
+            ForbiddenException: Caller is not the contest organizer.
+            AuctionNotActiveException: Auction is not currently ACTIVE.
+        """
+        auction = await self._dao.get_auction_by_id(auction_id)
+        if not auction:
+            raise AuctionNotFoundException(auction_id=auction_id)
+
+        contest = await self._contest_dao.get_by_id(auction.contest_id)
+        if not contest:
+            raise ContestNotFoundException(contest_id=auction.contest_id)
+
+        if contest.created_by != requesting_user_id:
+            raise ForbiddenException(
+                message="Only the contest organizer can force-end an auction"
+            )
+
+        if auction.status != AuctionStatus.ACTIVE:
+            raise AuctionNotActiveException(auction_id=auction_id)
+
+        # Read winner from Redis
+        highest_bid_raw = await self._redis.get(_bid_key(auction_id))
+        highest_team_raw = await self._redis.get(_team_key(auction_id))
+
+        winning_bid = int(highest_bid_raw) if highest_bid_raw else None
+        winning_team_id = (
+            highest_team_raw.decode()
+            if isinstance(highest_team_raw, bytes)
+            else highest_team_raw
+        ) or None
+
+        if not winning_team_id:
+            winning_team_id = None
+            winning_bid = None
+
+        now = datetime.now(tz=timezone.utc)
+        await self._dao.finish_auction_atomic(
+            auction_id=auction_id,
+            winning_team_id=winning_team_id,
+            winning_bid=winning_bid,
+            contest_id=auction.contest_id,
+            contest_problem_id=auction.contest_problem_id,
+            end_time=now,
+        )
+
+        await self._redis.delete(
+            _bid_key(auction_id),
+            _team_key(auction_id),
+            _lock_key(auction_id),
+        )
+
+        await manager.broadcast(
+            auction.contest_id,
+            {
+                "type": "AUCTION_FINISHED",
+                "winning_team_id": winning_team_id,
+                "winning_bid": winning_bid if winning_bid is not None else 0,
+            },
+        )
+
+        logger.info(
+            f"Auction {auction_id} force-ended by organizer={requesting_user_id} | "
+            f"winner={winning_team_id!r} | winning_bid={winning_bid!r}"
+        )
+
+        return await self._dao.get_auction_by_id(auction_id)
 
     # ── Get Auction Result ─────────────────────────────────────────────────────
 

@@ -44,7 +44,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Two Sum\n\n"
             "Given an array of integers `nums` and an integer `target`, return **indices** "
             "of the two numbers such that they add up to `target`.\n\n"
             "You may assume that each input would have **exactly one solution**, and you "
@@ -66,7 +65,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Reverse Linked List\n\n"
             "Given the `head` of a singly linked list, reverse the list and return the "
             "reversed list.\n\n"
             "### Example\n\n"
@@ -85,7 +83,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Valid Parentheses\n\n"
             "Given a string `s` containing just the characters `'('`, `')'`, `'{'`, `'}'`, "
             "`'['` and `']'`, determine if the input string is **valid**.\n\n"
             "An input string is valid if:\n"
@@ -105,7 +102,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 1000,
         "memory_limit_mb": 128,
         "description": (
-            "## Fibonacci Number\n\n"
             "The **Fibonacci numbers**, commonly denoted `F(n)`, form a sequence such that "
             "each number is the sum of the two preceding ones, starting from `0` and `1`.\n\n"
             "`F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2)` for `n > 1`.\n\n"
@@ -123,7 +119,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Longest Substring Without Repeating Characters\n\n"
             "Given a string `s`, find the length of the **longest substring** without "
             "repeating characters.\n\n"
             "### Example\n\n"
@@ -141,7 +136,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Binary Tree Level Order Traversal\n\n"
             "Given the `root` of a binary tree, return the **level order traversal** of "
             "its nodes' values (i.e., from left to right, level by level).\n\n"
             "### Example\n\n"
@@ -160,7 +154,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 3000,
         "memory_limit_mb": 256,
         "description": (
-            "## Coin Change\n\n"
             "You are given an integer array `coins` representing coins of different "
             "denominations and an integer `amount` representing a total amount of money.\n\n"
             "Return the **fewest number of coins** needed to make up that amount. "
@@ -181,7 +174,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Number of Islands\n\n"
             "Given an `m x n` 2D binary grid which represents a map of `'1'`s (land) and "
             "`'0'`s (water), return the **number of islands**.\n\n"
             "An island is surrounded by water and is formed by connecting adjacent lands "
@@ -209,7 +201,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 3000,
         "memory_limit_mb": 256,
         "description": (
-            "## Median of Two Sorted Arrays\n\n"
             "Given two sorted arrays `nums1` and `nums2` of size `m` and `n` respectively, "
             "return the **median** of the two sorted arrays.\n\n"
             "The overall runtime complexity should be `O(log(m+n))`.\n\n"
@@ -230,7 +221,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 2000,
         "memory_limit_mb": 256,
         "description": (
-            "## Trapping Rain Water\n\n"
             "Given `n` non-negative integers representing an elevation map where the width "
             "of each bar is `1`, compute how much water it can trap after raining.\n\n"
             "### Example\n\n"
@@ -249,7 +239,6 @@ BUILTIN_PROBLEMS = [
         "time_limit_ms": 5000,
         "memory_limit_mb": 512,
         "description": (
-            "## Word Ladder\n\n"
             "A **transformation sequence** from word `beginWord` to word `endWord` using a "
             "dictionary `wordList` is a sequence of words such that:\n\n"
             "- The first word is `beginWord`.\n"
