@@ -56,3 +56,16 @@ class AssignmentStatus(str, Enum):
     ASSIGNED = "ASSIGNED"
     SOLVED = "SOLVED"
     FAILED = "FAILED"
+
+
+class SubmissionVerdict(str, Enum):
+    """Overall verdict for a code submission."""
+
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    WRONG_ANSWER = "WRONG_ANSWER"
+    TIME_LIMIT_EXCEEDED = "TIME_LIMIT_EXCEEDED"
+    MEMORY_LIMIT_EXCEEDED = "MEMORY_LIMIT_EXCEEDED"
+    RUNTIME_ERROR = "RUNTIME_ERROR"
+    COMPILATION_ERROR = "COMPILATION_ERROR"
+    INTERNAL_ERROR = "INTERNAL_ERROR"

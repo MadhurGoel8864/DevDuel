@@ -10,6 +10,7 @@ from app.api.problems.routes.problems import (
     contest_problems_router,
     problems_router,
 )
+from app.api.submissions.routes.submissions import router as submissions_router
 from app.api.teams.routes.teams import router as teams_router
 from app.api.users.routes.users import router as users_router
 from app.core.database import get_db
@@ -39,3 +40,4 @@ api_router.include_router(teams_router)
 api_router.include_router(contests_router)
 api_router.include_router(problems_router)
 api_router.include_router(contest_problems_router)
+api_router.include_router(submissions_router)

@@ -95,6 +95,7 @@ class BuiltinProblemResponseData(BaseSchema):
     base_price: int
     time_limit_ms: int
     memory_limit_mb: int
+    test_cases_url: Optional[str] = None
     created_by: Optional[str] = "system"
     is_active: bool
     created_at: datetime
@@ -110,6 +111,7 @@ class ContestProblemResponseData(BaseSchema):
     base_price: int
     time_limit_ms: int
     memory_limit_mb: int
+    test_cases_url: Optional[str] = None
     is_active: bool
     created_at: datetime
     problem: Optional[BuiltinProblemResponseData] = None

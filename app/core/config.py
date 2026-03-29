@@ -84,6 +84,18 @@ class Settings(BaseSettings):
         default=f"{FRONTEND_BASE_URL}/reset-password"
     )
 
+    # ── Judge0 Code Execution ───────────────────────────────────────────────
+    JUDGE0_BASE_URL: str = Field(default="http://localhost:2358")
+    JUDGE0_AUTH_TOKEN: str = Field(default="")
+    JUDGE0_MAX_BATCH_SIZE: int = Field(default=20)
+    JUDGE0_POLL_INTERVAL_MS: int = Field(default=1000)
+    JUDGE0_POLL_MAX_ATTEMPTS: int = Field(default=30)
+
+    # ── Google Cloud Storage (Test Cases) ─────────────────────────────────────
+    GCS_BUCKET_NAME: str = Field(default="devduel-testcases-9876")
+    GCS_SERVICE_ACCOUNT_KEY_PATH: str = Field(default="")
+    GCS_PROJECT_ID: str = Field(default="")
+
     class Config:
         env_file = ".env"
 

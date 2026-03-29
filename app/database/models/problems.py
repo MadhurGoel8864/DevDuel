@@ -42,6 +42,9 @@ class BuiltinProblem(Base):
     memory_limit_mb = mapped_column(Integer, default=256, nullable=False)
     is_active = mapped_column(Boolean, default=True, nullable=False)
 
+    # GCS URL pointing to the JSON file containing test cases for this problem
+    test_cases_url = mapped_column(String(1024), nullable=True)
+
     created_at = mapped_column(
         DateTime(timezone=True),
         server_default=func.timezone("Asia/Kolkata", func.now()),
@@ -102,6 +105,9 @@ class ContestProblem(Base):
     memory_limit_mb = mapped_column(Integer, nullable=False)
 
     is_active = mapped_column(Boolean, default=True, nullable=False)
+
+    # Copied from BuiltinProblem on import (same test cases used during judging)
+    test_cases_url = mapped_column(String(1024), nullable=True)
 
     created_at = mapped_column(
         DateTime(timezone=True),

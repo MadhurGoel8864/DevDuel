@@ -148,6 +148,7 @@ class ContestProblemService:
             base_price=builtin.base_price,
             time_limit_ms=builtin.time_limit_ms,
             memory_limit_mb=builtin.memory_limit_mb,
+            test_cases_url=builtin.test_cases_url,
         )
         logger.info(
             f"Builtin problem {builtin_problem_id} imported into contest {contest_id} "

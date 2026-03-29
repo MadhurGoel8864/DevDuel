@@ -1,9 +1,12 @@
 # app/main.py
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.main import api_router
+from app.api.submissions.services.submissions import judge0_client
 from app.core.config import settings
 from app.core.exception_handlers import (
     app_exception_handler,
@@ -14,6 +17,14 @@ from app.core.exception_handlers import (
 from app.core.exceptions.base import AppException
 from app.core.logging import setup_logging
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage startup/shutdown of long-lived resources."""
+    await judge0_client.init()
+    yield
+    await judge0_client.close()
 
 
 def create_app() -> FastAPI:
@@ -30,6 +41,7 @@ def create_app() -> FastAPI:
         version="0.1.0",
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
 
     # Register exception handlers
