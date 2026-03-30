@@ -38,24 +38,42 @@ class GCSStorageService:
         self._bucket: storage.Bucket | None = None
 
     def _get_client(self) -> storage.Client:
-        """Lazy-init the GCS client on first use."""
+        """Lazy-init the GCS client on first use.
+
+        Supports two auth modes:
+        - GCS_SERVICE_ACCOUNT_KEY_JSON: raw JSON string (for server/CI deployments)
+        - GCS_SERVICE_ACCOUNT_KEY_PATH: path to a JSON key file (for local dev)
+        """
         if self._client is None:
+            key_json = settings.GCS_SERVICE_ACCOUNT_KEY_JSON
             key_path = settings.GCS_SERVICE_ACCOUNT_KEY_PATH
             project_id = settings.GCS_PROJECT_ID
 
-            if not key_path:
+            if not key_json and not key_path:
                 raise StorageError(
-                    "GCS_SERVICE_ACCOUNT_KEY_PATH is not configured. "
-                    "Please set it in your .env file."
+                    "GCS credentials not configured. Set either "
+                    "GCS_SERVICE_ACCOUNT_KEY_JSON or GCS_SERVICE_ACCOUNT_KEY_PATH."
                 )
 
             try:
-                credentials = service_account.Credentials.from_service_account_file(
-                    key_path
-                )
+                if key_json:
+                    info = json.loads(key_json)
+                    credentials = service_account.Credentials.from_service_account_info(
+                        info
+                    )
+                    logger.info("GCS client initialized from JSON env var")
+                else:
+                    credentials = service_account.Credentials.from_service_account_file(
+                        key_path
+                    )
+                    logger.info("GCS client initialized from key file")
+
                 self._client = storage.Client(
                     project=project_id, credentials=credentials
                 )
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid GCS_SERVICE_ACCOUNT_KEY_JSON: {e}")
+                raise StorageError(f"Invalid GCS service account JSON: {e}") from e
             except Exception as e:
                 logger.error(f"Failed to initialize GCS client: {e}")
                 raise StorageError(f"Failed to initialize GCS client: {e}") from e

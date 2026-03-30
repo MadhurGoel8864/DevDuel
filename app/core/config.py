@@ -93,7 +93,8 @@ class Settings(BaseSettings):
 
     # ── Google Cloud Storage (Test Cases) ─────────────────────────────────────
     GCS_BUCKET_NAME: str = Field(default="devduel-testcases-9876")
-    GCS_SERVICE_ACCOUNT_KEY_PATH: str = Field(default="")
+    GCS_SERVICE_ACCOUNT_KEY_PATH: str = Field(default="")  # Local: path to JSON key file
+    GCS_SERVICE_ACCOUNT_KEY_JSON: str = Field(default="")   # Server: raw JSON key content
     GCS_PROJECT_ID: str = Field(default="")
 
     class Config:
