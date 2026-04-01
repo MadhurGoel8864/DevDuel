@@ -18,7 +18,7 @@ from app.core.database import get_db
 # routers will be added later
 
 
-api_router = APIRouter(prefix="")
+api_router = APIRouter(prefix="/api")
 
 
 @api_router.get("/db-check")
