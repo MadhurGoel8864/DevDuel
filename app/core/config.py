@@ -3,7 +3,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 FRONTEND_BASE_URL = (
-    "http://localhost:5173"  # Used for constructing frontend URLs in emails
+    "https://devduel.site"  # Used for constructing frontend URLs in emails
 )
 
 
