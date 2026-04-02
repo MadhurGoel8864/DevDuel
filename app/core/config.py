@@ -2,10 +2,6 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-FRONTEND_BASE_URL = (
-    "https://devduel.site"  # Used for constructing frontend URLs in emails
-)
-
 
 class Settings(BaseSettings):
     # App
@@ -66,23 +62,29 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
+    # ── Frontend Base URL ──────────────────────────────────────────────────────
+    FRONTEND_BASE_URL: str = Field(default="http://localhost:5173")
+
     # ── Team Invite Settings ───────────────────────────────────────────────────
     INVITE_EXPIRE_SECONDS: int = 259200  # 3 days
     PENDING_JOIN_EXPIRE_SECONDS: int = 86400  # 1 day
 
-    # Frontend URLs embedded in invite emails
-    FRONTEND_INVITE_URL: str = Field(
-        default=f"{FRONTEND_BASE_URL}/teams/invite"
-    )
+    # Frontend URLs — derived from FRONTEND_BASE_URL, overridable individually in .env
+    @property
+    def FRONTEND_INVITE_URL(self) -> str:
+        return f"{self.FRONTEND_BASE_URL}/teams/invite"
 
-    FRONTEND_REGISTER_INVITE_URL: str = Field(
-        default=f"{FRONTEND_BASE_URL}/register"
-    )
+    @property
+    def FRONTEND_REGISTER_INVITE_URL(self) -> str:
+        return f"{self.FRONTEND_BASE_URL}/register"
 
-    # Frontend URL for password reset page (token appended as ?token=...)
-    FRONTEND_RESET_PASSWORD_URL: str = Field(
-        default=f"{FRONTEND_BASE_URL}/reset-password"
-    )
+    @property
+    def FRONTEND_RESET_PASSWORD_URL(self) -> str:
+        return f"{self.FRONTEND_BASE_URL}/reset-password"
+
+    @property
+    def FRONTEND_OAUTH_SUCCESS_URL(self) -> str:
+        return f"{self.FRONTEND_BASE_URL}/auth/google/callback"
 
     # ── Judge0 Code Execution ───────────────────────────────────────────────
     JUDGE0_BASE_URL: str = Field(default="http://localhost:2358")
