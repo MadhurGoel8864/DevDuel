@@ -68,6 +68,4 @@ def setup_logging():
     root_logger.handlers[0].setFormatter(formatter)
 
     # SQLAlchemy logging
-    sql_logger = logging.getLogger("sqlalchemy.engine")
-    sql_logger.setLevel(logging.WARNING)
-    sql_logger.propagate = False
+    logging.getLogger("sqlalchemy.engine.Engine").disabled = True

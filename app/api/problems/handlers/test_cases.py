@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import Body, Depends, Path
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from app.api.auth.dependencies import get_current_user
+from app.api.auth.dependencies import require_organizer
 from app.api.auth.schemas import UserWithPermissions
 from app.api.problems.dao.problems import (
     BuiltinProblemDAO,
@@ -62,7 +62,7 @@ UploadTestCasesResponse = APIResponse[UploadTestCasesResponseData]
 async def upload_test_cases_handler(
     problem_id: str = Path(..., description="Builtin Problem ID"),
     request: UploadTestCasesRequest = Body(...),
-    current_user: UserWithPermissions = Depends(get_current_user),
+    current_user: UserWithPermissions = Depends(require_organizer),
     dao: BuiltinProblemDAO = Depends(get_builtin_problem_dao),
 ) -> UploadTestCasesResponse:
     """Upload test cases for a builtin problem. Replaces any existing test cases in GCS."""

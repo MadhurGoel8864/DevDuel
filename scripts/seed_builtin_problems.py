@@ -10,6 +10,7 @@ import asyncio
 import re
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -20,7 +21,6 @@ from app.database.models.problems import BuiltinProblem  # noqa: E402
 from app.database.utils import generate_uuid  # noqa: E402
 
 # Allow running from the project root without installing the package.
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 engine = create_async_engine(settings.DB_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
