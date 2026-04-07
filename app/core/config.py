@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
+    SQLALCHEMY_DATABASE_URL: str = Field(default="") 
     # ── Frontend Base URL ──────────────────────────────────────────────────────
     FRONTEND_BASE_URL: str = Field(default="http://localhost:5173")
 
