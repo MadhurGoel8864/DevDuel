@@ -15,6 +15,7 @@ from app.api.bidding.schemas.bidding import (
     StartAuctionRequest,
 )
 from app.api.bidding.services.bidding import BiddingService, get_bidding_service
+from app.core.exceptions.bidding import AuctionNotFoundException
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,11 @@ async def get_current_auction_handler(
         f"[GET_CURRENT_AUCTION] user={current_user.user_id} | contest={contest_id}"
     )
 
-    auction = await bidding_service.get_current_auction(contest_id=contest_id)
+    try:
+        auction = await bidding_service.get_current_auction(contest_id=contest_id)
+    except AuctionNotFoundException:
+        logger.debug(f"[GET_CURRENT_AUCTION] No auction found for contest={contest_id}")
+        return AuctionResponse(success=True, data=None)
 
     logger.debug(
         f"[GET_CURRENT_AUCTION] Returning auction={auction.id} | status={auction.status.value}"
