@@ -106,9 +106,6 @@ class ContestProblem(Base):
 
     is_active = mapped_column(Boolean, default=True, nullable=False)
 
-    # Copied from BuiltinProblem on import (same test cases used during judging)
-    test_cases_url = mapped_column(String(1024), nullable=True)
-
     created_at = mapped_column(
         DateTime(timezone=True),
         server_default=func.timezone("Asia/Kolkata", func.now()),

@@ -170,18 +170,26 @@ class SubmissionService:
         language_id = SUPPORTED_LANGUAGES[language_lower]
         logger.debug(f"[submit] Language resolved: {language_lower} → id={language_id}")
 
-        # ── 5. Fetch test cases from GCS ──────────────────────────────────────
+        # ── 5. Fetch test cases from GCS (via builtin problem) ─────────────────
         contest_problem = await self._dao.get_contest_problem(contest_problem_id)
-        if not contest_problem or not contest_problem.test_cases_url:
+        if not contest_problem:
             logger.warning(
-                f"[submit] No test cases URL for problem {contest_problem_id}"
+                f"[submit] Contest problem not found: {contest_problem_id}"
             )
             raise NoTestCasesException()
 
-        logger.debug(f"[submit] Fetching test cases from: {contest_problem.test_cases_url}")
+        # Test cases live on the builtin problem, not the contest problem
+        builtin_problem = contest_problem.problem
+        if not builtin_problem or not builtin_problem.test_cases_url:
+            logger.warning(
+                f"[submit] No test cases URL on builtin problem for contest problem {contest_problem_id}"
+            )
+            raise NoTestCasesException()
+
+        logger.debug(f"[submit] Fetching test cases from: {builtin_problem.test_cases_url}")
         try:
             test_cases = storage_service.download_test_cases_from_url(
-                contest_problem.test_cases_url
+                builtin_problem.test_cases_url
             )
         except StorageError as e:
             logger.error(f"[submit] GCS download failed: {e}")

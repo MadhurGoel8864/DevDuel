@@ -85,7 +85,6 @@ class ContestProblemDAO:
         base_price: int,
         time_limit_ms: int,
         memory_limit_mb: int,
-        test_cases_url: str | None = None,
     ) -> ContestProblem:
         cp = ContestProblem(
             contest_id=contest_id,
@@ -96,7 +95,6 @@ class ContestProblemDAO:
             base_price=base_price,
             time_limit_ms=time_limit_ms,
             memory_limit_mb=memory_limit_mb,
-            test_cases_url=test_cases_url,
         )
         self._session.add(cp)
         await self._session.commit()

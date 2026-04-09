@@ -111,7 +111,6 @@ class ContestProblemResponseData(BaseSchema):
     base_price: int
     time_limit_ms: int
     memory_limit_mb: int
-    test_cases_url: Optional[str] = None
     is_active: bool
     created_at: datetime
     problem: Optional[BuiltinProblemResponseData] = None
