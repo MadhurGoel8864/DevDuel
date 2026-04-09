@@ -12,7 +12,10 @@ from app.api.problems.handlers.problems import (
     get_builtin_problem_handler,
     list_builtin_problems_handler,
 )
-from app.api.problems.handlers.test_cases import upload_test_cases_handler
+from app.api.problems.handlers.test_cases import (
+    get_test_cases_handler,
+    upload_test_cases_handler,
+)
 
 # ── /api/problems ─────────────────────────────────────────────────────────────
 problems_router = APIRouter(prefix="/problems", tags=["Problems"])
@@ -22,6 +25,12 @@ problems_router.add_api_route(
 )
 problems_router.add_api_route(
     "/{problem_id}", get_builtin_problem_handler, methods=["GET"]
+)
+problems_router.add_api_route(
+    "/{problem_id}/test-cases",
+    get_test_cases_handler,
+    methods=["GET"],
+    tags=["Test Cases"],
 )
 problems_router.add_api_route(
     "/{problem_id}/test-cases",

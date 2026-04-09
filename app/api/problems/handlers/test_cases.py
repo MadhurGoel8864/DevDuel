@@ -12,9 +12,13 @@ from app.api.problems.dao.problems import (
     BuiltinProblemDAO,
     get_builtin_problem_dao,
 )
-from app.core.exceptions.problems import BuiltinProblemNotFoundException
+from app.core.exceptions.problems import (
+    BuiltinProblemNotFoundException,
+    TestCasesNotFoundException,
+)
 from app.core.responses import APIResponse
 from app.services.storage import storage_service
+from app.services.storage.gcs import StorageError
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +60,26 @@ class UploadTestCasesResponseData(BaseModel):
 UploadTestCasesResponse = APIResponse[UploadTestCasesResponseData]
 
 
-# ── Handler ───────────────────────────────────────────────────────────────────
+class GetTestCaseItem(BaseModel):
+    input: str
+    expected_output: str
+    is_sample: bool
+
+
+class GetTestCasesResponseData(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    problem_id: str
+    problem_title: str
+    test_cases: list[GetTestCaseItem]
+    total_count: int
+    sample_count: int
+
+
+GetTestCasesResponse = APIResponse[GetTestCasesResponseData]
+
+
+# ── Handlers ─────────────────────────────────────────────────────────────────
 
 
 async def upload_test_cases_handler(
@@ -105,6 +128,43 @@ async def upload_test_cases_handler(
             problem_slug=problem.slug,
             test_cases_url=url,
             total_count=len(test_cases_raw),
+            sample_count=len(samples),
+        )
+    )
+
+
+async def get_test_cases_handler(
+    problem_id: str = Path(..., description="Builtin Problem ID"),
+    current_user: UserWithPermissions = Depends(require_organizer),
+    dao: BuiltinProblemDAO = Depends(get_builtin_problem_dao),
+) -> GetTestCasesResponse:
+    """Fetch all test cases for a builtin problem from GCS."""
+    problem = await dao.get_by_id(problem_id)
+    if not problem or not problem.is_active:
+        raise BuiltinProblemNotFoundException(builtin_problem_id=problem_id)
+
+    if not problem.test_cases_url:
+        raise TestCasesNotFoundException(problem_id=problem_id)
+
+    try:
+        test_cases_raw = storage_service.download_test_cases_from_url(
+            problem.test_cases_url
+        )
+    except StorageError:
+        logger.error(
+            f"[test_cases] Failed to download test cases for problem {problem_id}"
+        )
+        raise TestCasesNotFoundException(problem_id=problem_id)
+
+    test_cases = [GetTestCaseItem(**tc) for tc in test_cases_raw]
+    samples = [tc for tc in test_cases if tc.is_sample]
+
+    return GetTestCasesResponse(
+        data=GetTestCasesResponseData(
+            problem_id=problem.id,
+            problem_title=problem.title,
+            test_cases=test_cases,
+            total_count=len(test_cases),
             sample_count=len(samples),
         )
     )

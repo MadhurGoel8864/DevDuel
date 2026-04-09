@@ -99,6 +99,21 @@ class ContestProblemNotFoundException(AppException):
         )
 
 
+class TestCasesNotFoundException(AppException):
+    """Raised when test cases have not been uploaded for a problem. HTTP 404."""
+
+    def __init__(self, problem_id: Optional[str] = None):
+        details = {"problem_id": problem_id} if problem_id else None
+        super().__init__(
+            code="TEST_CASES_NOT_FOUND",
+            message=f"No test cases found for problem '{problem_id}'"
+            if problem_id
+            else "No test cases found for this problem",
+            status_code=404,
+            details=details,
+        )
+
+
 class NotContestOrganizerException(AppException):
     """Raised when a non-organizer tries to modify contest problems. HTTP 403."""
 
