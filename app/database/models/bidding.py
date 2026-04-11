@@ -97,7 +97,7 @@ class Bid(Base):
 
     created_at = mapped_column(
         DateTime(timezone=True),
-        server_default=func.timezone("Asia/Kolkata", func.now()),
+        server_default=func.now(),
         nullable=False,
     )
 

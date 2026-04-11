@@ -5,16 +5,18 @@ Imports the shared ConnectionManager singleton from connection_manager.py.
 
 Inbound message:
     {"type": "PLACE_BID", "auction_id":"...", "team_id":"...", "user_id":"...", "amount": N}
-    {"type": "FINISH_AUCTION", "auction_id":"..."}  # manual override
+    {"type": "FINISH_AUCTION", "auction_id":"...", "user_id":"..."}  # organizer only
 
 Outbound broadcast:
-    {"type": "NEW_HIGHEST_BID", "team_id":"...", "amount": N}
+    {"type": "SYNC", "server_time":"...", "current_auction": {...}|null}
+    {"type": "NEW_HIGHEST_BID", "server_time":"...", "team_id":"...", "team_name":"...", "amount": N}
+    {"type": "AUCTION_FINISHED", "server_time":"...", "auction_id":"...", "contest_problem_id":"...", "winning_team_id":"...", "winning_bid": N}
     {"type": "ERROR", "message":"..."}
-    {"type": "AUCTION_FINISHED", "auction_id":"...", "winning_team_id":"...", "winning_bid": N}
 """
 
 import json
 import logging
+from datetime import datetime, timezone
 
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -22,6 +24,10 @@ from app.api.bidding.connection_manager import manager
 from app.api.bidding.services.bidding import BiddingService
 
 logger = logging.getLogger(__name__)
+
+
+def _now_iso() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
 
 
 async def bidding_ws_endpoint(
@@ -47,6 +53,24 @@ async def bidding_ws_endpoint(
     )
 
     await manager.connect(websocket, contest_id)
+
+    # ── Send SYNC state so reconnecting/late clients can catch up ──────────
+    try:
+        sync_state = await bidding_service.get_sync_payload(contest_id=contest_id)
+        sync_payload = {
+            "type": "SYNC",
+            "server_time": _now_iso(),
+            **sync_state,
+        }
+        await websocket.send_text(json.dumps(sync_payload))
+        logger.info(
+            f"[WS:SYNC] Sent state to client={client_host} | contest={contest_id} | "
+            f"has_active_auction={sync_payload['current_auction'] is not None}"
+        )
+    except Exception as exc:
+        logger.debug(
+            f"[WS:SYNC] Failed to send sync for contest={contest_id}: {exc}"
+        )
 
     try:
         while True:
@@ -122,7 +146,9 @@ async def bidding_ws_endpoint(
                         contest_id,
                         {
                             "type": "NEW_HIGHEST_BID",
+                            "server_time": _now_iso(),
                             "team_id": result["team_id"],
+                            "team_name": result.get("team_name"),
                             "amount": result["amount"],
                         },
                     )
@@ -138,57 +164,50 @@ async def bidding_ws_endpoint(
                         json.dumps({"type": "ERROR", "message": error_msg})
                     )
 
-            # ── FINISH_AUCTION (manual override) ──────────────────────────────
+            # ── FINISH_AUCTION (manual override — organizer only) ─────────────
             elif msg_type == "FINISH_AUCTION":
                 auction_id = data.get("auction_id", "")
+                user_id = data.get("user_id", "")
 
                 logger.info(
                     f"[WS:FINISH_AUCTION] Manual trigger | contest={contest_id} | "
-                    f"auction={auction_id} | triggered_by=client={client_host}"
+                    f"auction={auction_id} | user={user_id} | client={client_host}"
                 )
 
-                if not auction_id:
+                if not auction_id or not user_id:
                     logger.warning(
                         f"[WS:FINISH_AUCTION:INVALID_INPUT] contest={contest_id} | "
-                        f"missing auction_id"
+                        f"auction_id={auction_id!r} | user_id={user_id!r}"
                     )
                     await websocket.send_text(
                         json.dumps(
                             {
                                 "type": "ERROR",
-                                "message": "FINISH_AUCTION requires auction_id",
+                                "message": "FINISH_AUCTION requires auction_id and user_id",
                             }
                         )
                     )
                     continue
 
                 try:
-                    assignment = await bidding_service.finish_auction(
-                        auction_id=auction_id
+                    # Routes through force_end_auction which verifies organizer auth
+                    auction = await bidding_service.force_end_auction(
+                        auction_id=auction_id,
+                        requesting_user_id=user_id,
                     )
-                    winning_team = assignment.team_id if assignment else None
-                    winning_bid = assignment.winning_bid if assignment else None
-
+                    # force_end_auction already broadcasts AUCTION_FINISHED
                     logger.info(
                         f"[WS:FINISH_AUCTION:SUCCESS] contest={contest_id} | "
-                        f"auction={auction_id} | winner={winning_team!r} | "
-                        f"winning_bid={winning_bid!r} | broadcasting to room"
-                    )
-                    await manager.broadcast(
-                        contest_id,
-                        {
-                            "type": "AUCTION_FINISHED",
-                            "auction_id": auction_id,
-                            "winning_team_id": winning_team,
-                            "winning_bid": winning_bid,
-                        },
+                        f"auction={auction_id} | winner={auction.winning_team_id!r} | "
+                        f"winning_bid={auction.winning_bid!r}"
                     )
                 except Exception as exc:
                     error_msg = getattr(exc, "message", str(exc))
                     error_code = getattr(exc, "code", "UNKNOWN")
                     logger.error(
                         f"[WS:FINISH_AUCTION:ERROR] contest={contest_id} | "
-                        f"auction={auction_id} | code={error_code} | reason={error_msg}"
+                        f"auction={auction_id} | user={user_id} | "
+                        f"code={error_code} | reason={error_msg}"
                     )
                     await websocket.send_text(
                         json.dumps({"type": "ERROR", "message": error_msg})

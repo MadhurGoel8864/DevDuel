@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -11,7 +12,12 @@ from redis.asyncio import Redis
 from app.api.bidding.connection_manager import manager
 from app.api.bidding.dao.bidding import BiddingDAO, get_bidding_dao
 from app.api.contests.dao.contests import ContestDAO, get_contest_dao
-from app.api.teams.dao.teams import TeamMemberDAO, get_team_member_dao
+from app.api.teams.dao.teams import (
+    TeamDAO,
+    TeamMemberDAO,
+    get_team_dao,
+    get_team_member_dao,
+)
 from app.core.enums import AuctionStatus, ContestStatus, TeamRole
 from app.core.exceptions.bidding import (
     AuctionAlreadyActiveException,
@@ -54,6 +60,11 @@ def _lock_key(auction_id: str) -> str:
     return _LOCK_KEY.format(auction_id=auction_id)
 
 
+def _now_iso() -> str:
+    """Return current UTC time as an ISO-8601 string for WS payloads."""
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
 class BiddingService:
     """Business logic for the bidding system."""
 
@@ -63,11 +74,13 @@ class BiddingService:
         redis: Redis,
         contest_dao: ContestDAO,
         member_dao: TeamMemberDAO,
+        team_dao: TeamDAO,
     ):
         self._dao = dao
         self._redis = redis
         self._contest_dao = contest_dao
         self._member_dao = member_dao
+        self._team_dao = team_dao
 
     # ── Start Auction ──────────────────────────────────────────────────────────
 
@@ -94,12 +107,26 @@ class BiddingService:
             AuctionAlreadyActiveException: Another auction is already running.
             NoProblemAvailableException: No remaining problems to auction.
         """
+        # 0. Validate duration bounds (defensive — schema also enforces)
+        if duration_seconds < 10 or duration_seconds > 600:
+            from app.core.exceptions.common import BadRequestException
+
+            raise BadRequestException(
+                message="duration_seconds must be between 10 and 600"
+            )
+
         # 1. Validate contest
         contest = await self._contest_dao.get_by_id(contest_id)
         if not contest:
             raise ContestNotFoundException(contest_id=contest_id)
         if contest.status != ContestStatus.ACTIVE:
             raise RegistrationClosedException(contest_id=contest_id)
+
+        # 1b. Only the contest organizer can start auctions
+        if contest.created_by != requesting_user_id:
+            raise ForbiddenException(
+                message="Only the contest organizer can start auctions"
+            )
 
         # 2. Guard — only one active auction per contest
         existing_active = await self._dao.get_active_auction_for_contest(contest_id)
@@ -160,17 +187,22 @@ class BiddingService:
         )
 
         # 7. Notify all connected clients that a new auction has started
+        auction_payload = await self.enrich_auction(auction)
+        # ISO-format datetimes for JSON
+        for key in ("start_time", "end_time", "created_at", "updated_at"):
+            if auction_payload.get(key) is not None and hasattr(
+                auction_payload[key], "isoformat"
+            ):
+                auction_payload[key] = auction_payload[key].isoformat()
+        if hasattr(auction_payload.get("status"), "value"):
+            auction_payload["status"] = auction_payload["status"].value
+
         await manager.broadcast(
             contest_id,
             {
                 "type": "AUCTION_STARTED",
-                "auction_id": auction.id,
-                "contest_problem_id": auction.contest_problem_id,
-                "base_price": auction.base_price,
-                "start_time": (
-                    auction.start_time.isoformat() if auction.start_time else None
-                ),
-                "end_time": auction.end_time.isoformat() if auction.end_time else None,
+                "server_time": _now_iso(),
+                "auction": auction_payload,
             },
         )
 
@@ -190,18 +222,111 @@ class BiddingService:
         await asyncio.sleep(delay)
         try:
             logger.info(f"Auto-finishing auction {auction_id} after {delay}s")
-            assignment = await self.finish_auction(auction_id)
+            # Hard timeout — finish_auction must complete within 30s or we abandon
+            assignment = await asyncio.wait_for(
+                self.finish_auction(auction_id),
+                timeout=30.0,
+            )
+            # Re-fetch auction so we have the canonical contest_problem_id
+            # (assignment may be None if there was no winner).
+            finished = await self._dao.get_auction_by_id(auction_id)
             await manager.broadcast(
                 contest_id,
                 {
                     "type": "AUCTION_FINISHED",
+                    "server_time": _now_iso(),
                     "auction_id": auction_id,
+                    "contest_problem_id": (
+                        finished.contest_problem_id if finished else None
+                    ),
                     "winning_team_id": assignment.team_id if assignment else None,
                     "winning_bid": assignment.winning_bid if assignment else None,
                 },
             )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"Auto-finish timed out after 30s for auction {auction_id}"
+            )
         except Exception as exc:
             logger.error(f"Auto-finish failed for auction {auction_id}: {exc}")
+
+    # ── Live State Enrichment ───────────────────────────────────────────────────
+
+    async def get_live_bid_state(self, auction_id: str) -> dict:
+        """
+        Read the current highest bid and team from Redis for an active auction.
+
+        Returns:
+            dict with current_highest_bid (int|None) and current_highest_team (str|None).
+        """
+        highest_bid_raw = await self._redis.get(_bid_key(auction_id))
+        highest_team_raw = await self._redis.get(_team_key(auction_id))
+
+        current_bid = int(highest_bid_raw) if highest_bid_raw else None
+        current_team = highest_team_raw or None
+
+        return {
+            "current_highest_bid": current_bid,
+            "current_highest_team": current_team,
+        }
+
+    async def get_sync_payload(self, contest_id: str) -> dict:
+        """
+        Build the SYNC payload sent to a (re)connecting WebSocket client.
+
+        Includes the current active auction (enriched with live Redis state)
+        and the contest's status so the client can rebuild its UI.
+        """
+        contest = await self._contest_dao.get_by_id(contest_id)
+        contest_status = contest.status.value if contest and hasattr(
+            contest.status, "value"
+        ) else (contest.status if contest else None)
+
+        current_auction_payload = None
+        try:
+            current_auction = await self.get_current_auction(contest_id=contest_id)
+        except Exception:
+            current_auction = None
+
+        if current_auction and current_auction.status == AuctionStatus.ACTIVE:
+            current_auction_payload = await self.enrich_auction(current_auction)
+            for key in ("start_time", "end_time", "created_at", "updated_at"):
+                val = current_auction_payload.get(key)
+                if val is not None and hasattr(val, "isoformat"):
+                    current_auction_payload[key] = val.isoformat()
+            if hasattr(current_auction_payload.get("status"), "value"):
+                current_auction_payload["status"] = current_auction_payload[
+                    "status"
+                ].value
+
+        return {
+            "contest_status": contest_status,
+            "current_auction": current_auction_payload,
+        }
+
+    async def enrich_auction(self, auction: ProblemAuction) -> dict:
+        """
+        Convert a ProblemAuction ORM object to a dict, enriching ACTIVE auctions
+        with live bid data from Redis.
+
+        For ACTIVE auctions, both `current_highest_*` and `winning_*` fields are
+        set to the live values so the frontend can use either name as the source
+        of truth. For FINISHED auctions, `winning_*` reflects the final result
+        from the DB.
+        """
+        from app.api.bidding.schemas.bidding import AuctionResponseData
+
+        data = AuctionResponseData.model_validate(auction).model_dump()
+
+        if auction.status == AuctionStatus.ACTIVE:
+            live = await self.get_live_bid_state(auction.id)
+            data.update(live)
+            # Mirror live state into winning_* so the frontend's existing
+            # Auction type sees the running leader during active auctions.
+            data["winning_bid"] = live["current_highest_bid"]
+            data["winning_team_id"] = live["current_highest_team"]
+
+        return data
 
     # ── List All Auctions ──────────────────────────────────────────────────────
 
@@ -316,7 +441,7 @@ class BiddingService:
 
         # 4–6. Redis lock → check → update
         lock_key = _lock_key(auction_id)
-        lock_identifier = f"{team_id}:{amount}"
+        lock_identifier = str(uuid.uuid4())
 
         # SET NX EX — acquire lock; if already held, reject immediately (no spin-wait)
         acquired = await self._redis.set(
@@ -330,6 +455,10 @@ class BiddingService:
             )
 
         try:
+            # Re-verify deadline under lock to prevent bids after auction finishes
+            if auction.end_time and datetime.now(tz=timezone.utc) > auction.end_time:
+                raise AuctionExpiredException(auction_id=auction_id)
+
             current_highest = int(await self._redis.get(_bid_key(auction_id)) or 0)
             if amount <= current_highest:
                 raise BidTooLowException(
@@ -353,10 +482,14 @@ class BiddingService:
             bid_amount=amount,
         )
 
+        # Fetch team name for the broadcast (avoids N+1 fetches on every client)
+        team = await self._team_dao.get_by_id(team_id)
+        team_name = team.name if team else None
+
         logger.info(
-            f"New highest bid: team={team_id}, amount={amount}, auction={auction_id}"
+            f"New highest bid: team={team_id} ({team_name}), amount={amount}, auction={auction_id}"
         )
-        return {"team_id": team_id, "amount": amount}
+        return {"team_id": team_id, "team_name": team_name, "amount": amount}
 
     # ── Finish Auction ─────────────────────────────────────────────────────────
 
@@ -379,6 +512,11 @@ class BiddingService:
         auction = await self._dao.get_auction_by_id(auction_id)
         if not auction:
             raise AuctionNotFoundException(auction_id=auction_id)
+
+        # Guard: already finished — return existing result without overwriting
+        if auction.status == AuctionStatus.FINISHED:
+            logger.info(f"Auction {auction_id} already finished, skipping")
+            return None
 
         # 1. Read from Redis
         highest_bid_raw = await self._redis.get(_bid_key(auction_id))
@@ -494,6 +632,9 @@ class BiddingService:
             auction.contest_id,
             {
                 "type": "AUCTION_FINISHED",
+                "server_time": _now_iso(),
+                "auction_id": auction_id,
+                "contest_problem_id": auction.contest_problem_id,
                 "winning_team_id": winning_team_id,
                 "winning_bid": winning_bid if winning_bid is not None else 0,
             },
@@ -529,10 +670,12 @@ async def get_bidding_service(
     redis: Redis = Depends(get_redis_client),
     contest_dao: ContestDAO = Depends(get_contest_dao),
     member_dao: TeamMemberDAO = Depends(get_team_member_dao),
+    team_dao: TeamDAO = Depends(get_team_dao),
 ) -> BiddingService:
     return BiddingService(
         dao=dao,
         redis=redis,
         contest_dao=contest_dao,
         member_dao=member_dao,
+        team_dao=team_dao,
     )

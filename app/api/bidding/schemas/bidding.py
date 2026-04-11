@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.enums import AssignmentStatus, AuctionStatus
 from app.core.responses import APIResponse
@@ -19,8 +19,8 @@ class BaseSchema(BaseModel):
 class StartAuctionData(BaseSchema):
     """Data payload for starting an auction."""
 
-    contest_problem_id: str
-    duration_seconds: int = 60
+    contest_problem_id: Optional[str] = None
+    duration_seconds: int = Field(default=60, ge=10, le=600)
 
 
 class StartAuctionRequest(BaseSchema):
@@ -61,6 +61,9 @@ class AuctionResponseData(BaseSchema):
     end_time: Optional[datetime] = None
     winning_team_id: Optional[str] = None
     winning_bid: Optional[int] = None
+    # Live fields — populated from Redis for ACTIVE auctions
+    current_highest_bid: Optional[int] = None
+    current_highest_team: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

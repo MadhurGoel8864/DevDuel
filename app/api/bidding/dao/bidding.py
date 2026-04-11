@@ -273,6 +273,11 @@ class BiddingDAO:
             if not auction:
                 return None
 
+            # Guard: already finished — don't overwrite winner info
+            if auction.status == AuctionStatus.FINISHED:
+                logger.info(f"Auction {auction_id} already FINISHED, skipping atomic finish")
+                return None
+
             auction.status = AuctionStatus.FINISHED
             auction.winning_team_id = winning_team_id
             auction.winning_bid = winning_bid

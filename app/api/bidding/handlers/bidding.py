@@ -62,6 +62,7 @@ async def get_all_auctions_handler(
 ) -> AuctionListResponse:
     """
     Return all auctions for a contest, ordered by created_at ascending.
+    Active auctions include live bid data from Redis.
     """
     logger.debug(
         f"[GET_ALL_AUCTIONS] user={current_user.user_id} | contest={contest_id}"
@@ -72,11 +73,13 @@ async def get_all_auctions_handler(
         requesting_user_id=current_user.user_id,
     )
 
+    enriched = [await bidding_service.enrich_auction(a) for a in auctions]
+
     logger.debug(
         f"[GET_ALL_AUCTIONS] Returning {len(auctions)} auctions for contest={contest_id}"
     )
     return AuctionListResponse(
-        data=[AuctionResponseData.model_validate(a) for a in auctions]
+        data=[AuctionResponseData(**a) for a in enriched]
     )
 
 
@@ -87,6 +90,7 @@ async def get_current_auction_handler(
 ) -> AuctionResponse:
     """
     Return the current (or most recent) auction for a contest.
+    Active auctions include live bid data from Redis.
     """
     logger.debug(
         f"[GET_CURRENT_AUCTION] user={current_user.user_id} | contest={contest_id}"
@@ -98,10 +102,13 @@ async def get_current_auction_handler(
         logger.debug(f"[GET_CURRENT_AUCTION] No auction found for contest={contest_id}")
         return AuctionResponse(success=True, data=None)
 
+    enriched = await bidding_service.enrich_auction(auction)
+
     logger.debug(
-        f"[GET_CURRENT_AUCTION] Returning auction={auction.id} | status={auction.status.value}"
+        f"[GET_CURRENT_AUCTION] Returning auction={auction.id} | status={auction.status.value} | "
+        f"live_bid={enriched.get('current_highest_bid')}"
     )
-    return AuctionResponse(data=AuctionResponseData.model_validate(auction))
+    return AuctionResponse(data=AuctionResponseData(**enriched))
 
 
 async def get_auction_result_handler(
