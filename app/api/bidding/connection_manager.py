@@ -50,13 +50,30 @@ class ConnectionManager:
 
     async def broadcast(self, contest_id: str, message: dict) -> None:
         """Send a JSON message to every client in a contest room."""
+        msg_type = message.get("type", "UNKNOWN")
+        room = list(self._rooms.get(contest_id, []))
+        if not room:
+            logger.warning(
+                f"[broadcast] type={msg_type} to contest={contest_id} "
+                f"had 0 recipients (room empty)"
+            )
+            return
+        logger.info(
+            f"[broadcast] type={msg_type} contest={contest_id} "
+            f"recipients={len(room)}"
+        )
         payload = json.dumps(message)
         dead: list[WebSocket] = []
-        for ws in list(self._rooms[contest_id]):
+        for ws in room:
             try:
                 await ws.send_text(payload)
             except Exception:
                 dead.append(ws)
+        if dead:
+            logger.warning(
+                f"[broadcast] Removed {len(dead)} dead connections "
+                f"from contest={contest_id}"
+            )
         for ws in dead:
             if ws in self._rooms[contest_id]:
                 self._rooms[contest_id].remove(ws)
