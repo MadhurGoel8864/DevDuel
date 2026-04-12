@@ -288,15 +288,32 @@ class BiddingDAO:
             assignment: Optional[ContestProblemAssignment] = None
 
             if winning_team_id and winning_bid is not None:
-                # Step 2: Deduct currency (single UPDATE, no separate commit)
-                await self._session.execute(
+                # Step 2: Deduct currency — but ONLY if the team still has
+                # enough. The conditional WHERE makes the update a no-op
+                # if currency has drifted below winning_bid (e.g. a bug
+                # elsewhere deducted twice). Without this guard the
+                # balance can silently go negative.
+                deduct_result = await self._session.execute(
                     update(TeamContest)
                     .where(
                         TeamContest.team_id == winning_team_id,
                         TeamContest.contest_id == contest_id,
+                        TeamContest.currency >= winning_bid,
                     )
                     .values(currency=TeamContest.currency - winning_bid)
                 )
+                if deduct_result.rowcount == 0:
+                    # Currency check failed — mark auction FINISHED with no
+                    # winner rather than committing a broken state.
+                    logger.error(
+                        f"Auction {auction_id}: winning team {winning_team_id} "
+                        f"has insufficient currency for bid={winning_bid}; "
+                        f"finalizing with no winner"
+                    )
+                    auction.winning_team_id = None
+                    auction.winning_bid = None
+                    await self._session.commit()
+                    return None
 
                 # Step 3: Create assignment
                 assignment = ContestProblemAssignment(

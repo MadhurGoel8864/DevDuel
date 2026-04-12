@@ -4,8 +4,13 @@ WebSocket bid handler for real-time bidding.
 Imports the shared ConnectionManager singleton from connection_manager.py.
 
 Inbound message:
-    {"type": "PLACE_BID", "auction_id":"...", "team_id":"...", "user_id":"...", "amount": N}
-    {"type": "FINISH_AUCTION", "auction_id":"...", "user_id":"..."}  # organizer only
+    {"type": "PLACE_BID", "auction_id": "...", "team_id": "...", "amount": N}
+    {"type": "FINISH_AUCTION", "auction_id": "..."}  # organizer only
+
+Note: `user_id` in the payload is IGNORED. The caller is identified by the
+JWT `token` query parameter validated in `routes/bidding.py` before this
+handler runs — passing the user_id through the wire would let anyone bid
+as anyone.
 
 Outbound broadcast:
     {"type": "SYNC", "server_time":"...", "current_auction": {...}|null}
@@ -34,25 +39,23 @@ async def bidding_ws_endpoint(
     websocket: WebSocket,
     contest_id: str,
     bidding_service: BiddingService,
+    authenticated_user_id: str,
 ) -> None:
     """
     WebSocket handler for real-time bidding in a contest.
 
-    Connection lifecycle:
-      1. Client connects  →  accepted into the contest room.
-      2. Client sends PLACE_BID / FINISH_AUCTION message.
-      3. Service validates and processes.
-      4. On success, broadcast result to everyone in the room.
-      5. On error, send ERROR message back to the sender only.
-      6. Client disconnects  →  removed from the room.
+    `authenticated_user_id` is the `sub` claim of the JWT passed as the
+    `?token=` query param when the socket was opened. It is the only
+    identity the server will trust — any `user_id` field in inbound
+    messages is ignored.
     """
     client_host = websocket.client.host if websocket.client else "unknown"
-    logger.info(
-        f"[WS:CONNECT] client={client_host} | contest={contest_id} | "
-        f"room_size_after={len(manager._rooms[contest_id]) + 1}"
-    )
 
     await manager.connect(websocket, contest_id)
+    logger.info(
+        f"[WS:CONNECT] client={client_host} | contest={contest_id} | "
+        f"user={authenticated_user_id} | room_size={manager.room_size(contest_id)}"
+    )
 
     # ── Send SYNC state so reconnecting/late clients can catch up ──────────
     try:
@@ -96,6 +99,14 @@ async def bidding_ws_endpoint(
                 )
                 continue
 
+            if not isinstance(data, dict):
+                await websocket.send_text(
+                    json.dumps(
+                        {"type": "ERROR", "message": "Message must be a JSON object"}
+                    )
+                )
+                continue
+
             msg_type = data.get("type", "")
             logger.debug(
                 f"[WS:MSG_TYPE] contest={contest_id} | type={msg_type!r} | client={client_host}"
@@ -103,28 +114,43 @@ async def bidding_ws_endpoint(
 
             # ── PLACE_BID ─────────────────────────────────────────────────────
             if msg_type == "PLACE_BID":
-                team_id = data.get("team_id", "")
-                amount = data.get("amount", 0)
-                user_id = data.get("user_id", "")
-                auction_id = data.get("auction_id", "")
+                team_id = data.get("team_id")
+                amount = data.get("amount")
+                auction_id = data.get("auction_id")
 
                 logger.info(
                     f"[WS:PLACE_BID] contest={contest_id} | auction={auction_id} | "
-                    f"team={team_id} | user={user_id} | amount={amount}"
+                    f"team={team_id} | user={authenticated_user_id} | amount={amount}"
                 )
 
-                # Input validation
-                if not team_id or not auction_id or not user_id or amount <= 0:
-                    logger.warning(
-                        f"[WS:PLACE_BID:INVALID_INPUT] contest={contest_id} | "
-                        f"team_id={team_id!r} | user_id={user_id!r} | "
-                        f"auction_id={auction_id!r} | amount={amount!r}"
-                    )
+                # Strict input validation — JSON-decoded values can be any type,
+                # and the downstream service assumes ints for currency math.
+                if (
+                    not isinstance(team_id, str)
+                    or not team_id
+                    or not isinstance(auction_id, str)
+                    or not auction_id
+                ):
                     await websocket.send_text(
                         json.dumps(
                             {
                                 "type": "ERROR",
-                                "message": "PLACE_BID requires team_id, user_id, auction_id, and a positive amount.",
+                                "message": "PLACE_BID requires non-empty string team_id and auction_id",
+                            }
+                        )
+                    )
+                    continue
+                # `True`/`False` are ints in Python; exclude them explicitly.
+                if (
+                    not isinstance(amount, int)
+                    or isinstance(amount, bool)
+                    or amount <= 0
+                ):
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "ERROR",
+                                "message": "PLACE_BID amount must be a positive integer",
                             }
                         )
                     )
@@ -134,19 +160,20 @@ async def bidding_ws_endpoint(
                     result = await bidding_service.place_bid(
                         auction_id=auction_id,
                         team_id=team_id,
-                        user_id=user_id,
+                        user_id=authenticated_user_id,
                         amount=amount,
                     )
                     logger.info(
                         f"[WS:PLACE_BID:SUCCESS] contest={contest_id} | auction={auction_id} | "
-                        f"team={team_id} | user={user_id} | new_highest={result['amount']} | "
-                        f"broadcasting to room"
+                        f"team={team_id} | user={authenticated_user_id} | "
+                        f"new_highest={result['amount']} | broadcasting to room"
                     )
                     await manager.broadcast(
                         contest_id,
                         {
                             "type": "NEW_HIGHEST_BID",
                             "server_time": _now_iso(),
+                            "auction_id": auction_id,
                             "team_id": result["team_id"],
                             "team_name": result.get("team_name"),
                             "amount": result["amount"],
@@ -157,7 +184,7 @@ async def bidding_ws_endpoint(
                     error_code = getattr(exc, "code", "UNKNOWN")
                     logger.warning(
                         f"[WS:PLACE_BID:REJECTED] contest={contest_id} | auction={auction_id} | "
-                        f"team={team_id} | user={user_id} | amount={amount} | "
+                        f"team={team_id} | user={authenticated_user_id} | amount={amount} | "
                         f"code={error_code} | reason={error_msg}"
                     )
                     await websocket.send_text(
@@ -166,24 +193,19 @@ async def bidding_ws_endpoint(
 
             # ── FINISH_AUCTION (manual override — organizer only) ─────────────
             elif msg_type == "FINISH_AUCTION":
-                auction_id = data.get("auction_id", "")
-                user_id = data.get("user_id", "")
+                auction_id = data.get("auction_id")
 
                 logger.info(
                     f"[WS:FINISH_AUCTION] Manual trigger | contest={contest_id} | "
-                    f"auction={auction_id} | user={user_id} | client={client_host}"
+                    f"auction={auction_id} | user={authenticated_user_id} | client={client_host}"
                 )
 
-                if not auction_id or not user_id:
-                    logger.warning(
-                        f"[WS:FINISH_AUCTION:INVALID_INPUT] contest={contest_id} | "
-                        f"auction_id={auction_id!r} | user_id={user_id!r}"
-                    )
+                if not isinstance(auction_id, str) or not auction_id:
                     await websocket.send_text(
                         json.dumps(
                             {
                                 "type": "ERROR",
-                                "message": "FINISH_AUCTION requires auction_id and user_id",
+                                "message": "FINISH_AUCTION requires a non-empty string auction_id",
                             }
                         )
                     )
@@ -193,7 +215,7 @@ async def bidding_ws_endpoint(
                     # Routes through force_end_auction which verifies organizer auth
                     auction = await bidding_service.force_end_auction(
                         auction_id=auction_id,
-                        requesting_user_id=user_id,
+                        requesting_user_id=authenticated_user_id,
                     )
                     # force_end_auction already broadcasts AUCTION_FINISHED
                     logger.info(
@@ -206,7 +228,7 @@ async def bidding_ws_endpoint(
                     error_code = getattr(exc, "code", "UNKNOWN")
                     logger.error(
                         f"[WS:FINISH_AUCTION:ERROR] contest={contest_id} | "
-                        f"auction={auction_id} | user={user_id} | "
+                        f"auction={auction_id} | user={authenticated_user_id} | "
                         f"code={error_code} | reason={error_msg}"
                     )
                     await websocket.send_text(
@@ -229,12 +251,11 @@ async def bidding_ws_endpoint(
                 )
 
     except WebSocketDisconnect:
-        room_size = len(manager._rooms.get(contest_id, []))
+        manager.disconnect(websocket, contest_id)
         logger.info(
             f"[WS:DISCONNECT] client={client_host} | contest={contest_id} | "
-            f"room_size_after={room_size - 1 if room_size > 0 else 0}"
+            f"room_size={manager.room_size(contest_id)}"
         )
-        manager.disconnect(websocket, contest_id)
 
     except Exception as exc:
         logger.error(

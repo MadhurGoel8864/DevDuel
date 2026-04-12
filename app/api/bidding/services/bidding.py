@@ -1,6 +1,5 @@
 """Bidding Service Layer — core business logic."""
 
-import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -11,7 +10,13 @@ from redis.asyncio import Redis
 
 from app.api.bidding.connection_manager import manager
 from app.api.bidding.dao.bidding import BiddingDAO, get_bidding_dao
-from app.api.contests.dao.contests import ContestDAO, get_contest_dao
+from app.api.bidding.services.auction_scheduler import auction_scheduler
+from app.api.contests.dao.contests import (
+    ContestDAO,
+    TeamContestDAO,
+    get_contest_dao,
+    get_team_contest_dao,
+)
 from app.api.teams.dao.teams import (
     TeamDAO,
     TeamMemberDAO,
@@ -75,12 +80,14 @@ class BiddingService:
         contest_dao: ContestDAO,
         member_dao: TeamMemberDAO,
         team_dao: TeamDAO,
+        team_contest_dao: TeamContestDAO,
     ):
         self._dao = dao
         self._redis = redis
         self._contest_dao = contest_dao
         self._member_dao = member_dao
         self._team_dao = team_dao
+        self._team_contest_dao = team_contest_dao
 
     # ── Start Auction ──────────────────────────────────────────────────────────
 
@@ -169,21 +176,47 @@ class BiddingService:
             end_time=end_time,
         )
 
-        # 5. Seed Redis state
-        await self._redis.set(_bid_key(auction.id), auction.base_price)
-        await self._redis.set(_team_key(auction.id), "")
+        # 5. Seed Redis state. If Redis is down, roll the auction row back
+        #    to FINISHED-no-winner so we never leave a dangling ACTIVE row
+        #    that bids will target with a fallback-of-zero highest.
+        try:
+            await self._redis.set(_bid_key(auction.id), auction.base_price)
+            await self._redis.set(_team_key(auction.id), "")
+        except Exception as exc:
+            logger.error(
+                f"Redis seed failed for auction {auction.id}; rolling back: {exc!r}"
+            )
+            try:
+                await self._dao.finish_auction_atomic(
+                    auction_id=auction.id,
+                    winning_team_id=None,
+                    winning_bid=None,
+                    contest_id=contest_id,
+                    contest_problem_id=cp.id,
+                    end_time=datetime.now(tz=timezone.utc),
+                )
+            except Exception as rollback_exc:
+                logger.error(
+                    f"Rollback to FINISHED failed for auction {auction.id}: "
+                    f"{rollback_exc!r}"
+                )
+            from app.core.exceptions.common import BadRequestException
+
+            raise BadRequestException(
+                message="Failed to initialize auction state. Please try again."
+            )
 
         logger.info(
             f"Auction {auction.id} started for problem {cp.id} in contest {contest_id}"
         )
 
-        # 6. Schedule automatic finish after the timer expires
-        asyncio.create_task(
-            self._schedule_auto_finish(
-                auction_id=auction.id,
-                contest_id=contest_id,
-                delay=duration_seconds,
-            )
+        # 6. Schedule automatic finish at the wall-clock end_time. The
+        #    scheduler owns its own DB session so the request-scoped session
+        #    is free to close when this handler returns.
+        auction_scheduler.schedule(
+            auction_id=auction.id,
+            contest_id=contest_id,
+            end_time=end_time,
         )
 
         # 7. Notify all connected clients that a new auction has started
@@ -207,48 +240,6 @@ class BiddingService:
         )
 
         return auction
-
-    async def _schedule_auto_finish(
-        self, auction_id: str, contest_id: str, delay: int
-    ) -> None:
-        """
-        Background coroutine: waits `delay` seconds then auto-finishes the auction
-        and broadcasts the result to all connected WebSocket clients.
-
-        If the auction was already manually finished before the timer fires,
-        `finish_auction()` is idempotent — the DB row is already FINISHED so
-        the Redis keys are gone and it returns cleanly.
-        """
-        await asyncio.sleep(delay)
-        try:
-            logger.info(f"Auto-finishing auction {auction_id} after {delay}s")
-            # Hard timeout — finish_auction must complete within 30s or we abandon
-            assignment = await asyncio.wait_for(
-                self.finish_auction(auction_id),
-                timeout=30.0,
-            )
-            # Re-fetch auction so we have the canonical contest_problem_id
-            # (assignment may be None if there was no winner).
-            finished = await self._dao.get_auction_by_id(auction_id)
-            await manager.broadcast(
-                contest_id,
-                {
-                    "type": "AUCTION_FINISHED",
-                    "server_time": _now_iso(),
-                    "auction_id": auction_id,
-                    "contest_problem_id": (
-                        finished.contest_problem_id if finished else None
-                    ),
-                    "winning_team_id": assignment.team_id if assignment else None,
-                    "winning_bid": assignment.winning_bid if assignment else None,
-                },
-            )
-        except asyncio.TimeoutError:
-            logger.error(
-                f"Auto-finish timed out after 30s for auction {auction_id}"
-            )
-        except Exception as exc:
-            logger.error(f"Auto-finish failed for auction {auction_id}: {exc}")
 
     # ── Live State Enrichment ───────────────────────────────────────────────────
 
@@ -309,10 +300,11 @@ class BiddingService:
         Convert a ProblemAuction ORM object to a dict, enriching ACTIVE auctions
         with live bid data from Redis.
 
-        For ACTIVE auctions, both `current_highest_*` and `winning_*` fields are
-        set to the live values so the frontend can use either name as the source
-        of truth. For FINISHED auctions, `winning_*` reflects the final result
-        from the DB.
+        For ACTIVE auctions only `current_highest_bid` / `current_highest_team`
+        are populated — `winning_bid` / `winning_team_id` stay None until the
+        auction is actually FINISHED. Mirroring the live leader into the
+        `winning_*` fields caused clients that read `winning_bid` to
+        prematurely render an in-progress auction as already-won.
         """
         from app.api.bidding.schemas.bidding import AuctionResponseData
 
@@ -320,11 +312,10 @@ class BiddingService:
 
         if auction.status == AuctionStatus.ACTIVE:
             live = await self.get_live_bid_state(auction.id)
-            data.update(live)
-            # Mirror live state into winning_* so the frontend's existing
-            # Auction type sees the running leader during active auctions.
-            data["winning_bid"] = live["current_highest_bid"]
-            data["winning_team_id"] = live["current_highest_team"]
+            data["current_highest_bid"] = live["current_highest_bid"]
+            data["current_highest_team"] = live["current_highest_team"]
+            # winning_* intentionally left as whatever the DB row has
+            # (None for a fresh ACTIVE auction).
 
         return data
 
@@ -346,7 +337,7 @@ class BiddingService:
 
         is_organizer = contest.created_by == requesting_user_id
         if not is_organizer:
-            in_contest = await self._contest_dao.is_user_in_contest(
+            in_contest = await self._team_contest_dao.is_user_in_contest(
                 contest_id, requesting_user_id
             )
             if not in_contest:
@@ -455,11 +446,21 @@ class BiddingService:
             )
 
         try:
-            # Re-verify deadline under lock to prevent bids after auction finishes
-            if auction.end_time and datetime.now(tz=timezone.utc) > auction.end_time:
+            # Re-read the auction *under the lock* so a concurrent
+            # finish_auction() cannot sneak a bid into a FINISHED row.
+            fresh = await self._dao.get_auction_by_id(auction_id)
+            if not fresh or fresh.status != AuctionStatus.ACTIVE:
+                raise AuctionNotActiveException(auction_id=auction_id)
+            if fresh.end_time and datetime.now(tz=timezone.utc) > fresh.end_time:
                 raise AuctionExpiredException(auction_id=auction_id)
 
-            current_highest = int(await self._redis.get(_bid_key(auction_id)) or 0)
+            # If the Redis keys are gone, the auction has already been
+            # finalized (or never seeded); do NOT fall back to 0 — that
+            # would let any positive bid sneak into a FINISHED auction.
+            highest_raw = await self._redis.get(_bid_key(auction_id))
+            if highest_raw is None:
+                raise AuctionNotActiveException(auction_id=auction_id)
+            current_highest = int(highest_raw)
             if amount <= current_highest:
                 raise BidTooLowException(
                     bid_amount=amount, current_highest=current_highest
@@ -518,16 +519,13 @@ class BiddingService:
             logger.info(f"Auction {auction_id} already finished, skipping")
             return None
 
-        # 1. Read from Redis
+        # 1. Read from Redis. The client is configured with
+        #    decode_responses=True so values are always str | None.
         highest_bid_raw = await self._redis.get(_bid_key(auction_id))
         highest_team_raw = await self._redis.get(_team_key(auction_id))
 
+        winning_team_id = highest_team_raw or None
         winning_bid = int(highest_bid_raw) if highest_bid_raw else None
-        winning_team_id = (
-            highest_team_raw.decode()
-            if isinstance(highest_team_raw, bytes)
-            else highest_team_raw
-        ) or None
 
         # No winner if no team has bid above base_price
         if not winning_team_id:
@@ -597,16 +595,18 @@ class BiddingService:
         if auction.status != AuctionStatus.ACTIVE:
             raise AuctionNotActiveException(auction_id=auction_id)
 
-        # Read winner from Redis
+        # Cancel the auto-finish timer before finalizing so the scheduler
+        # can't wake up and broadcast a duplicate AUCTION_FINISHED with
+        # winning_bid=None on top of our authoritative one.
+        auction_scheduler.cancel(auction_id)
+
+        # Read winner from Redis (client uses decode_responses=True, so
+        # values are always str | None).
         highest_bid_raw = await self._redis.get(_bid_key(auction_id))
         highest_team_raw = await self._redis.get(_team_key(auction_id))
 
+        winning_team_id = highest_team_raw or None
         winning_bid = int(highest_bid_raw) if highest_bid_raw else None
-        winning_team_id = (
-            highest_team_raw.decode()
-            if isinstance(highest_team_raw, bytes)
-            else highest_team_raw
-        ) or None
 
         if not winning_team_id:
             winning_team_id = None
@@ -671,6 +671,7 @@ async def get_bidding_service(
     contest_dao: ContestDAO = Depends(get_contest_dao),
     member_dao: TeamMemberDAO = Depends(get_team_member_dao),
     team_dao: TeamDAO = Depends(get_team_dao),
+    team_contest_dao: TeamContestDAO = Depends(get_team_contest_dao),
 ) -> BiddingService:
     return BiddingService(
         dao=dao,
@@ -678,4 +679,5 @@ async def get_bidding_service(
         contest_dao=contest_dao,
         member_dao=member_dao,
         team_dao=team_dao,
+        team_contest_dao=team_contest_dao,
     )

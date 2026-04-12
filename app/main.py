@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.bidding.services.auction_scheduler import auction_scheduler
 from app.api.main import api_router
 from app.api.submissions.services.submissions import judge0_client
 from app.core.config import settings
@@ -23,7 +24,11 @@ from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
 async def lifespan(app: FastAPI):
     """Manage startup/shutdown of long-lived resources."""
     await judge0_client.init()
+    # Run the bidding auction recovery sweep and start the in-process
+    # scheduler so auctions auto-finish even across process restarts.
+    await auction_scheduler.start()
     yield
+    await auction_scheduler.stop()
     await judge0_client.close()
 
 

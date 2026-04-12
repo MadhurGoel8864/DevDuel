@@ -26,6 +26,10 @@ class ConnectionManager:
         # contest_id → list of active WebSocket connections
         self._rooms: dict[str, list[WebSocket]] = defaultdict(list)
 
+    def room_size(self, contest_id: str) -> int:
+        """Return the number of active WebSockets in a contest room."""
+        return len(self._rooms.get(contest_id, []))
+
     async def connect(self, websocket: WebSocket, contest_id: str) -> None:
         """Accept and register a new WebSocket connection."""
         await websocket.accept()
