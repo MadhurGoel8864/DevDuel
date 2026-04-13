@@ -19,6 +19,7 @@ Outbound broadcast:
     {"type": "ERROR", "message":"..."}
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -29,6 +30,11 @@ from app.api.bidding.connection_manager import manager
 from app.api.bidding.services.bidding import BiddingService
 
 logger = logging.getLogger(__name__)
+
+
+# Must be shorter than nginx's proxy_read_timeout (default 60 s) so the
+# server-sent PING resets the idle timer before nginx closes the connection.
+_KEEPALIVE_INTERVAL = 20  # seconds
 
 
 def _now_iso() -> str:
@@ -79,7 +85,18 @@ async def bidding_ws_endpoint(
         while True:
             # ── Receive raw message ────────────────────────────────────────────
             try:
-                raw = await websocket.receive_text()
+                raw = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=_KEEPALIVE_INTERVAL
+                )
+            except asyncio.TimeoutError:
+                # No message from the client for _KEEPALIVE_INTERVAL seconds.
+                # Send a server-side PING so nginx's proxy_read_timeout is
+                # reset and the idle connection isn't silently dropped.
+                try:
+                    await websocket.send_text(json.dumps({"type": "PING"}))
+                except Exception:
+                    raise WebSocketDisconnect(code=1001, reason="keepalive failed")
+                continue
             except WebSocketDisconnect:
                 raise  # let the outer except handle it
 
