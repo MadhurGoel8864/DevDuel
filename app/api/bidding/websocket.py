@@ -282,3 +282,7 @@ async def bidding_ws_endpoint(
             exc_info=True,
         )
         manager.disconnect(websocket, contest_id)
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            pass
