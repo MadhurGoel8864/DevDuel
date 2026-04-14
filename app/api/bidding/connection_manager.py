@@ -48,8 +48,8 @@ class ConnectionManager:
             f"Remaining: {len(self._rooms[contest_id])}"
         )
 
-    async def broadcast(self, contest_id: str, message: dict) -> None:
-        """Send a JSON message to every client in a contest room."""
+    async def broadcast_local(self, contest_id: str, message: dict) -> None:
+        """Send a JSON message to every local client in a contest room."""
         msg_type = message.get("type", "UNKNOWN")
         room = list(self._rooms.get(contest_id, []))
         if not room:
@@ -77,6 +77,10 @@ class ConnectionManager:
         for ws in dead:
             if ws in self._rooms[contest_id]:
                 self._rooms[contest_id].remove(ws)
+
+    async def broadcast(self, contest_id: str, message: dict) -> None:
+        """Backward-compatible alias; use broadcast_local for clarity."""
+        await self.broadcast_local(contest_id=contest_id, message=message)
 
 
 # Module-level singleton — import this everywhere instead of instantiating locally

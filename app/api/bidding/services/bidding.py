@@ -8,9 +8,9 @@ from typing import Optional
 from fastapi import Depends
 from redis.asyncio import Redis
 
-from app.api.bidding.connection_manager import manager
 from app.api.bidding.dao.bidding import BiddingDAO, get_bidding_dao
 from app.api.bidding.services.auction_scheduler import auction_scheduler
+from app.api.bidding.services.event_bus import fanout_bidding_event
 from app.api.contests.dao.contests import (
     ContestDAO,
     TeamContestDAO,
@@ -230,9 +230,9 @@ class BiddingService:
         if hasattr(auction_payload.get("status"), "value"):
             auction_payload["status"] = auction_payload["status"].value
 
-        await manager.broadcast(
-            contest_id,
-            {
+        await fanout_bidding_event(
+            contest_id=contest_id,
+            payload={
                 "type": "AUCTION_STARTED",
                 "server_time": _now_iso(),
                 "auction": auction_payload,
@@ -628,9 +628,9 @@ class BiddingService:
             _lock_key(auction_id),
         )
 
-        await manager.broadcast(
-            auction.contest_id,
-            {
+        await fanout_bidding_event(
+            contest_id=auction.contest_id,
+            payload={
                 "type": "AUCTION_FINISHED",
                 "server_time": _now_iso(),
                 "auction_id": auction_id,

@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     OTP_EXPIRE_SECONDS: int = 300  # 5 minutes
     REDIS_URL: str = "redis://localhost:6379/0"
+    BIDDING_REDIS_PUBSUB_ENABLED: bool = Field(default=False)
 
     # SMTP Email Configuration (Optional - required only if using email service)
     smtp_host: str = Field(default="smtp.gmail.com")

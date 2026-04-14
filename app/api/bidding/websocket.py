@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.api.bidding.connection_manager import manager
+from app.api.bidding.services.event_bus import fanout_bidding_event
 from app.api.bidding.services.bidding import BiddingService
 
 logger = logging.getLogger(__name__)
@@ -185,9 +186,9 @@ async def bidding_ws_endpoint(
                         f"team={team_id} | user={authenticated_user_id} | "
                         f"new_highest={result['amount']} | broadcasting to room"
                     )
-                    await manager.broadcast(
-                        contest_id,
-                        {
+                    await fanout_bidding_event(
+                        contest_id=contest_id,
+                        payload={
                             "type": "NEW_HIGHEST_BID",
                             "server_time": _now_iso(),
                             "auction_id": auction_id,

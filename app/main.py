@@ -5,7 +5,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.bidding.connection_manager import manager
 from app.api.bidding.services.auction_scheduler import auction_scheduler
+from app.api.bidding.services.event_bus import bidding_event_subscriber
 from app.api.main import api_router
 from app.api.submissions.services.submissions import judge0_client
 from app.core.config import settings
@@ -27,7 +29,16 @@ async def lifespan(app: FastAPI):
     # Run the bidding auction recovery sweep and start the in-process
     # scheduler so auctions auto-finish even across process restarts.
     await auction_scheduler.start()
+    if settings.BIDDING_REDIS_PUBSUB_ENABLED:
+        await bidding_event_subscriber.start(
+            on_event=lambda contest_id, payload: manager.broadcast_local(
+                contest_id=contest_id,
+                message=payload,
+            )
+        )
     yield
+    if settings.BIDDING_REDIS_PUBSUB_ENABLED:
+        await bidding_event_subscriber.stop()
     await auction_scheduler.stop()
     await judge0_client.close()
 

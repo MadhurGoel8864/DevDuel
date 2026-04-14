@@ -31,8 +31,8 @@ from typing import Optional
 
 from sqlalchemy import select
 
-from app.api.bidding.connection_manager import manager
 from app.api.bidding.dao.bidding import BiddingDAO
+from app.api.bidding.services.event_bus import fanout_bidding_event
 from app.api.contests.dao.contests import ContestDAO, TeamContestDAO
 from app.api.teams.dao.teams import TeamDAO, TeamMemberDAO
 from app.core.database import AsyncSessionLocal
@@ -186,9 +186,9 @@ class AuctionScheduler:
             # Some other code path already finalized this auction — don't
             # double-broadcast.
             return
-        await manager.broadcast(
-            contest_id,
-            {
+        await fanout_bidding_event(
+            contest_id=contest_id,
+            payload={
                 "type": "AUCTION_FINISHED",
                 "server_time": _now_iso(),
                 "auction_id": auction_id,
