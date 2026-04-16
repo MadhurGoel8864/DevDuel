@@ -48,6 +48,9 @@ class TestResultResponseData(BaseSchema):
     stdout: Optional[str] = None
     stderr: Optional[str] = None
     compile_output: Optional[str] = None
+    is_sample: bool = False
+    input: Optional[str] = None
+    expected_output: Optional[str] = None
 
 
 class SubmissionResponseData(BaseSchema):
@@ -83,6 +86,7 @@ class SubmissionListItem(BaseSchema):
     """Lightweight submission for list views."""
 
     id: str
+    contest_problem_id: str
     language: str
     verdict: SubmissionVerdict
     passed_test_cases: int

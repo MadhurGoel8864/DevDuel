@@ -294,7 +294,7 @@ class SubmissionService:
         first_error_output = None
         test_result_records = []
 
-        for idx, result in enumerate(results):
+        for idx, (tc, result) in enumerate(zip(test_cases, results)):
             verdict_str = JUDGE0_TO_VERDICT.get(
                 result.status.id, "INTERNAL_ERROR"
             )
@@ -329,6 +329,7 @@ class SubmissionService:
                 f"status_id={result.status.id}"
             )
 
+            is_sample = bool(tc.get("is_sample", False))
             test_result_records.append(
                 SubmissionTestResult(
                     submission_id=submission.id,
@@ -341,6 +342,9 @@ class SubmissionService:
                     compile_output=compile_decoded,
                     time_ms=time_ms,
                     memory_kb=memory_kb,
+                    is_sample=is_sample,
+                    input=tc["input"] if is_sample else None,
+                    expected_output=tc["expected_output"] if is_sample else None,
                 )
             )
 

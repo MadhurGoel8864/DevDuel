@@ -1,6 +1,7 @@
 """Submission-related SQLAlchemy models: Submission, SubmissionTestResult."""
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -123,6 +124,11 @@ class SubmissionTestResult(Base):
 
     time_ms = mapped_column(Integer, nullable=True)
     memory_kb = mapped_column(Integer, nullable=True)
+
+    # Sample test case fields (only populated when is_sample=True)
+    is_sample = mapped_column(Boolean, nullable=False, default=False)
+    input = mapped_column(Text, nullable=True)
+    expected_output = mapped_column(Text, nullable=True)
 
     # Relationships
     submission = relationship("Submission", back_populates="test_results")
