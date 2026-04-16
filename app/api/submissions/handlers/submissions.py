@@ -7,6 +7,8 @@ from fastapi import Body, Depends, Path
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
 from app.api.submissions.schemas.submissions import (
+    LatestSolutionResponse,
+    LatestSolutionResponseData,
     SubmissionDetailResponse,
     SubmissionDetailResponseData,
     SubmissionListItem,
@@ -96,4 +98,27 @@ async def list_submissions_for_team_handler(
     )
     return SubmissionListResponse(
         data=[SubmissionListItem.model_validate(s) for s in submissions]
+    )
+
+
+async def get_latest_solution_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    contest_problem_id: str = Path(..., description="Contest Problem ID"),
+    team_id: str = Path(..., description="Team ID"),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    service: SubmissionService = Depends(get_submission_service),
+) -> LatestSolutionResponse:
+    """Return the team's latest submitted code for a contest problem.
+
+    Used by the coding editor (rehydrate on reload) and by organizers
+    (review what a team submitted). Authorized for team members and organizers.
+    """
+    solution = await service.get_latest_solution(
+        team_id=team_id,
+        contest_problem_id=contest_problem_id,
+        requester_user_id=current_user.user_id,
+        is_organizer=current_user.is_organizer,
+    )
+    return LatestSolutionResponse(
+        data=LatestSolutionResponseData.model_validate(solution)
     )

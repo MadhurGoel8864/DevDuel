@@ -1,4 +1,4 @@
-"""Submission-related SQLAlchemy models: Submission, SubmissionTestResult."""
+"""Submission-related SQLAlchemy models: Submission, SubmissionTestResult, TeamProblemSolution."""
 
 from sqlalchemy import (
     Boolean,
@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import mapped_column, relationship
@@ -135,4 +136,56 @@ class SubmissionTestResult(Base):
 
     __table_args__ = (
         Index("ix_str_submission_id", "submission_id"),
+    )
+
+
+class TeamProblemSolution(Base):
+    """The latest submitted code by a team for a contest problem.
+
+    Upserted on every submission so editor rehydration, organizer review,
+    and submission history can all read the most recent code with O(1) lookup.
+    The full per-submission audit trail still lives on `submissions`.
+    """
+
+    __tablename__ = "team_problem_solutions"
+
+    id = mapped_column(String(36), primary_key=True, default=generate_uuid)
+
+    team_id = mapped_column(
+        String(36),
+        ForeignKey("teams.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    contest_problem_id = mapped_column(
+        String(36),
+        ForeignKey("contest_problems.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    contest_id = mapped_column(
+        String(36),
+        ForeignKey("contests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    language = mapped_column(String(50), nullable=False)
+    source_code = mapped_column(Text, nullable=False)
+
+    last_submission_id = mapped_column(
+        String(36),
+        ForeignKey("submissions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    updated_at = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.timezone("Asia/Kolkata", func.now()),
+        onupdate=func.timezone("Asia/Kolkata", func.now()),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "team_id", "contest_problem_id", name="uq_tps_team_problem"
+        ),
+        Index("ix_tps_contest_id", "contest_id"),
     )

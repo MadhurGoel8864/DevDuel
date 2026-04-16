@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.submissions.handlers.submissions import (
+    get_latest_solution_handler,
     get_submission_handler,
     list_submissions_for_problem_handler,
     list_submissions_for_team_handler,
@@ -19,10 +20,10 @@ router.add_api_route(
     status_code=201,
 )
 
-# Get submission details (with test results)
+# Get the latest submitted code for a team on a problem (must precede /{submission_id})
 router.add_api_route(
-    "/{submission_id}",
-    get_submission_handler,
+    "/contests/{contest_id}/problems/{contest_problem_id}/teams/{team_id}/latest-code",
+    get_latest_solution_handler,
     methods=["GET"],
 )
 
@@ -37,5 +38,12 @@ router.add_api_route(
 router.add_api_route(
     "/contests/{contest_id}/teams/{team_id}",
     list_submissions_for_team_handler,
+    methods=["GET"],
+)
+
+# Get submission details (with test results) — generic /{submission_id}, register last
+router.add_api_route(
+    "/{submission_id}",
+    get_submission_handler,
     methods=["GET"],
 )

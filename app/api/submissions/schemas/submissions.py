@@ -64,6 +64,7 @@ class SubmissionResponseData(BaseSchema):
     user_id: Optional[str] = None
     language: str
     language_id: int
+    source_code: str
     verdict: SubmissionVerdict
     passed_test_cases: int
     total_test_cases: int
@@ -96,8 +97,21 @@ class SubmissionListItem(BaseSchema):
     submitted_at: datetime
 
 
+class LatestSolutionResponseData(BaseSchema):
+    """Latest submitted code by a team for a contest problem."""
+
+    team_id: str
+    contest_problem_id: str
+    contest_id: str
+    language: str
+    source_code: str
+    last_submission_id: Optional[str] = None
+    updated_at: datetime
+
+
 # ── Response Aliases ──────────────────────────────────────────────────────────
 
 SubmissionResponse = APIResponse[SubmissionResponseData]
 SubmissionDetailResponse = APIResponse[SubmissionDetailResponseData]
 SubmissionListResponse = APIResponse[list[SubmissionListItem]]
+LatestSolutionResponse = APIResponse[LatestSolutionResponseData]

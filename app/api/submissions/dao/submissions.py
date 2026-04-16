@@ -4,7 +4,8 @@ import logging
 from typing import Optional
 
 from fastapi import Depends
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -12,7 +13,11 @@ from app.core.enums import AssignmentStatus, ContestStatus, SubmissionVerdict
 from app.database.models.bidding import ContestProblemAssignment
 from app.database.models.contests import Contest, TeamContest
 from app.database.models.problems import ContestProblem
-from app.database.models.submissions import Submission, SubmissionTestResult
+from app.database.models.submissions import (
+    Submission,
+    SubmissionTestResult,
+    TeamProblemSolution,
+)
 from app.database.models.teams import TeamMember
 
 logger = logging.getLogger(__name__)
@@ -129,6 +134,50 @@ class SubmissionDAO:
         for r in results:
             await self._session.refresh(r)
         return results
+
+    # ── Latest Solution (per team, per problem) ───────────────────────────────
+
+    async def upsert_team_problem_solution(
+        self,
+        team_id: str,
+        contest_problem_id: str,
+        contest_id: str,
+        language: str,
+        source_code: str,
+        last_submission_id: str,
+    ) -> TeamProblemSolution:
+        """Insert or update the latest code for (team, contest_problem) in one round-trip."""
+        insert_stmt = pg_insert(TeamProblemSolution).values(
+            team_id=team_id,
+            contest_problem_id=contest_problem_id,
+            contest_id=contest_id,
+            language=language,
+            source_code=source_code,
+            last_submission_id=last_submission_id,
+        )
+        upsert_stmt = insert_stmt.on_conflict_do_update(
+            constraint="uq_tps_team_problem",
+            set_={
+                "language": insert_stmt.excluded.language,
+                "source_code": insert_stmt.excluded.source_code,
+                "last_submission_id": insert_stmt.excluded.last_submission_id,
+                "updated_at": func.timezone("Asia/Kolkata", func.now()),
+            },
+        ).returning(TeamProblemSolution)
+        result = await self._session.execute(upsert_stmt)
+        await self._session.commit()
+        return result.scalar_one()
+
+    async def get_solution_by_team_and_problem(
+        self, team_id: str, contest_problem_id: str
+    ) -> Optional[TeamProblemSolution]:
+        result = await self._session.execute(
+            select(TeamProblemSolution).where(
+                TeamProblemSolution.team_id == team_id,
+                TeamProblemSolution.contest_problem_id == contest_problem_id,
+            )
+        )
+        return result.scalar_one_or_none()
 
     # ── Scoring (atomic) ──────────────────────────────────────────────────────
 

@@ -14,7 +14,11 @@ from app.core.enums import (
     TeamRole,
 )
 from app.core.exceptions.base import AppException
-from app.database.models.submissions import Submission, SubmissionTestResult
+from app.database.models.submissions import (
+    Submission,
+    SubmissionTestResult,
+    TeamProblemSolution,
+)
 from app.services.judge0.client import Judge0Client, Judge0Error, Judge0TimeoutError
 from app.services.judge0.constants import JUDGE0_TO_VERDICT, SUPPORTED_LANGUAGES
 from app.services.judge0.schemas import Judge0SubmissionRequest
@@ -103,6 +107,24 @@ class SubmissionNotFoundException(SubmissionException):
             message=f"Submission '{submission_id}' not found" if submission_id else
             "Submission not found",
             status_code=404,
+        )
+
+
+class LatestSolutionNotFoundException(SubmissionException):
+    def __init__(self):
+        super().__init__(
+            code="LATEST_SOLUTION_NOT_FOUND",
+            message="No code has been submitted yet for this team and problem",
+            status_code=404,
+        )
+
+
+class NotAllowedToViewCodeException(SubmissionException):
+    def __init__(self):
+        super().__init__(
+            code="NOT_ALLOWED_TO_VIEW_CODE",
+            message="Only team members or organizers can view this code",
+            status_code=403,
         )
 
 
@@ -220,6 +242,23 @@ class SubmissionService:
         )
         submission = await self._dao.create_submission(submission)
         logger.info(f"[submit] Submission record created: id={submission.id}")
+
+        # Persist as the team's latest code for this problem (overwrite-on-submit).
+        # Failure here must not poison the judging pipeline — we log and continue.
+        try:
+            await self._dao.upsert_team_problem_solution(
+                team_id=team_id,
+                contest_problem_id=contest_problem_id,
+                contest_id=contest_id,
+                language=language_lower,
+                source_code=source_code,
+                last_submission_id=submission.id,
+            )
+        except Exception as e:
+            logger.error(
+                f"[submit] Failed to upsert TeamProblemSolution for submission "
+                f"{submission.id}: {e}"
+            )
 
         # ── 7. Build Judge0 batch request ─────────────────────────────────────
         source_b64 = base64.b64encode(source_code.encode()).decode()
@@ -413,6 +452,29 @@ class SubmissionService:
         return await self._dao.list_submissions_for_team_in_contest(
             team_id, contest_id
         )
+
+    async def get_latest_solution(
+        self,
+        team_id: str,
+        contest_problem_id: str,
+        requester_user_id: str,
+        is_organizer: bool,
+    ) -> TeamProblemSolution:
+        """Return the latest submitted code for (team, problem).
+
+        Authorized for team members and organizers.
+        """
+        if not is_organizer:
+            member = await self._dao.get_team_member(team_id, requester_user_id)
+            if not member:
+                raise NotAllowedToViewCodeException()
+
+        solution = await self._dao.get_solution_by_team_and_problem(
+            team_id, contest_problem_id
+        )
+        if not solution:
+            raise LatestSolutionNotFoundException()
+        return solution
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
