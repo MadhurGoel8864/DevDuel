@@ -171,7 +171,7 @@ class BiddingService:
         auction = await self._dao.create_auction(
             contest_id=contest_id,
             contest_problem_id=cp.id,
-            base_price=cp.problem.base_price,
+            base_price=cp.base_price,
             start_time=now,
             end_time=end_time,
         )
