@@ -17,6 +17,7 @@ from app.api.contests.dao.contests import (
     get_contest_dao,
     get_team_contest_dao,
 )
+from app.api.contests.services.leaderboard_broadcast import broadcast_leaderboard
 from app.api.teams.dao.teams import (
     TeamDAO,
     TeamMemberDAO,
@@ -555,6 +556,11 @@ class BiddingService:
             _lock_key(auction_id),
         )
 
+        # 6. Broadcast leaderboard — currency deducted only when there is a winner,
+        # but we still refresh to keep everyone in sync.
+        if winning_team_id:
+            await broadcast_leaderboard(auction.contest_id)
+
         return assignment
 
     # ── Force End Auction ──────────────────────────────────────────────────────
@@ -639,6 +645,9 @@ class BiddingService:
                 "winning_bid": winning_bid if winning_bid is not None else 0,
             },
         )
+
+        if winning_team_id:
+            await broadcast_leaderboard(auction.contest_id)
 
         logger.info(
             f"Auction {auction_id} force-ended by organizer={requesting_user_id} | "

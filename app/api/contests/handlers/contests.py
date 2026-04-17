@@ -17,6 +17,8 @@ from app.api.contests.schemas.contests import (
     ContestResponse,
     ContestResponseData,
     ContestSummaryData,
+    DetailedLeaderboardEntryData,
+    DetailedLeaderboardResponse,
     LeaderboardEntryData,
     LeaderboardResponse,
     RegisterTeamRequest,
@@ -267,16 +269,37 @@ async def get_contest_leaderboard_handler(
     Return all teams in a contest ranked by score desc, then currency desc.
     """
     ranked = await contest_service.get_contest_leaderboard(contest_id=contest_id)
+    name_by_team_id = dict(
+        await contest_service.list_registered_teams(contest_id=contest_id)
+    )
     return LeaderboardResponse(
         data=[
             LeaderboardEntryData(
                 rank=rank,
                 team_id=tc.team_id,
+                team_name=name_by_team_id.get(tc.team_id, ""),
                 score=tc.score,
                 currency=tc.currency,
             )
             for rank, tc in ranked
         ]
+    )
+
+
+async def get_detailed_leaderboard_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    current_user: UserWithPermissions = Depends(require_organizer),
+    contest_service: ContestService = Depends(get_contest_service),
+) -> DetailedLeaderboardResponse:
+    """
+    Organizer-only enriched leaderboard: per-team bidding efficiency and
+    submission presence. Organizer must be the contest creator.
+    """
+    rows = await contest_service.get_detailed_leaderboard(
+        contest_id=contest_id, requesting_user_id=current_user.user_id
+    )
+    return DetailedLeaderboardResponse(
+        data=[DetailedLeaderboardEntryData(**row) for row in rows]
     )
 
 

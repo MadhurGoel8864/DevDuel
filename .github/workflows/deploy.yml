@@ -1,0 +1,42 @@
+name: Deploy DevDual
+
+on:
+  push:
+    branches:
+      - main   # backend repo trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VM
+        run: |
+          ssh -p ${{ secrets.VM_PORT }} ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
+
+          echo "🚀 Starting Deployment..."
+
+          # ===== FRONTEND =====
+          cd ~/DevDual-Frontend || exit 1
+          git pull origin master
+          npm install
+          npm run build
+          sudo cp -r dist/* /var/www/devduel/
+          sudo systemctl restart nginx
+
+          # ===== BACKEND =====
+          cd ~/DevDuel || exit 1
+          git pull origin main
+          make migrate
+          sudo systemctl restart fastapi
+
+          echo "✅ Deployment Complete"
+
+          EOF

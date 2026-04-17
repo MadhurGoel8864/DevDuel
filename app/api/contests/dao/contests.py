@@ -459,6 +459,92 @@ class TeamContestDAO:
             )
             raise e
 
+    async def get_leaderboard_stats(
+        self, contest_id: str, team_ids: list[str]
+    ) -> dict[str, dict]:
+        """
+        Aggregate bidding-efficiency + submission-presence metrics per team.
+
+        Returns a dict keyed by team_id with keys:
+            problems_won (int)
+            total_currency_spent (int)
+            attempted_problem_ids (list[str]) — unique contest_problem_ids
+                with at least one submission
+            solved_problem_ids (list[str]) — unique contest_problem_ids with
+                at least one ACCEPTED submission
+        """
+        # Imported here to avoid a circular import between DAO and domain
+        # models that already import from this module transitively.
+        from app.core.enums import SubmissionVerdict
+        from app.database.models.bidding import ContestProblemAssignment
+        from app.database.models.submissions import Submission
+
+        if not team_ids:
+            return {}
+
+        stats: dict[str, dict] = {
+            team_id: {
+                "problems_won": 0,
+                "total_currency_spent": 0,
+                "attempted_problem_ids": [],
+                "solved_problem_ids": [],
+            }
+            for team_id in team_ids
+        }
+
+        # Assignment aggregates: problems_won + total_currency_spent
+        assignment_rows = await self._session.execute(
+            select(
+                ContestProblemAssignment.team_id,
+                func.count(ContestProblemAssignment.id),
+                func.coalesce(func.sum(ContestProblemAssignment.winning_bid), 0),
+            )
+            .where(
+                ContestProblemAssignment.contest_id == contest_id,
+                ContestProblemAssignment.team_id.in_(team_ids),
+            )
+            .group_by(ContestProblemAssignment.team_id)
+        )
+        for team_id, won_count, spent in assignment_rows.all():
+            stats.setdefault(
+                team_id,
+                {
+                    "problems_won": 0,
+                    "total_currency_spent": 0,
+                    "attempted_problem_ids": [],
+                    "solved_problem_ids": [],
+                },
+            )
+            stats[team_id]["problems_won"] = int(won_count or 0)
+            stats[team_id]["total_currency_spent"] = int(spent or 0)
+
+        # Attempted problem ids — any submission
+        attempted_rows = await self._session.execute(
+            select(Submission.team_id, Submission.contest_problem_id)
+            .where(
+                Submission.contest_id == contest_id,
+                Submission.team_id.in_(team_ids),
+            )
+            .distinct()
+        )
+        for team_id, cp_id in attempted_rows.all():
+            stats[team_id]["attempted_problem_ids"].append(cp_id)
+
+        # Solved problem ids — at least one ACCEPTED submission
+        solved_rows = await self._session.execute(
+            select(Submission.team_id, Submission.contest_problem_id)
+            .where(
+                Submission.contest_id == contest_id,
+                Submission.team_id.in_(team_ids),
+                Submission.verdict == SubmissionVerdict.ACCEPTED,
+            )
+            .distinct()
+        )
+        for team_id, cp_id in solved_rows.all():
+            stats[team_id]["solved_problem_ids"].append(cp_id)
+
+        return stats
+
     async def get_contest_user_ids(self, contest_id: str) -> set[str]:
         """Return all user_ids across all teams registered for a contest."""
         try:

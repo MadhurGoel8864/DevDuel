@@ -9,6 +9,7 @@ from app.api.contests.handlers.contests import (
     end_contest_handler,
     get_contest_handler,
     get_contest_leaderboard_handler,
+    get_detailed_leaderboard_handler,
     get_my_contests_handler,
     get_team_in_contest_handler,
     list_active_contests_handler,
@@ -52,6 +53,16 @@ router.add_api_route(
 )
 router.add_api_route(
     "/{contest_id}/teams", get_contest_leaderboard_handler, methods=["GET"]
+)
+router.add_api_route(
+    "/{contest_id}/leaderboard/detailed",
+    get_detailed_leaderboard_handler,
+    methods=["GET"],
+    summary="Detailed Leaderboard (Organizer)",
+    description=(
+        "Enriched leaderboard with per-team bidding efficiency and submission "
+        "presence metadata. Organizer-only; must be the contest creator."
+    ),
 )
 router.add_api_route(
     "/{contest_id}/teams/{team_id}", get_team_in_contest_handler, methods=["GET"]

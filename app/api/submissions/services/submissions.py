@@ -6,6 +6,7 @@ from datetime import datetime
 
 from fastapi import Depends
 
+from app.api.contests.services.leaderboard_broadcast import broadcast_leaderboard
 from app.api.submissions.dao.submissions import SubmissionDAO, get_submission_dao
 from app.core.enums import (
     AssignmentStatus,
@@ -422,6 +423,7 @@ class SubmissionService:
                 f"passed={passed}/{len(test_cases)}, "
                 f"max_time={max_time_ms}ms, max_memory={max_memory_kb}KB"
             )
+            await broadcast_leaderboard(contest_id)
         else:
             logger.info(
                 f"[submit] REJECTED: submission={submission.id}, "

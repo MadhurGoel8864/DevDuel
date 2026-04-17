@@ -429,6 +429,65 @@ class ContestService:
         )
         return [(i + 1, tc) for i, tc in enumerate(sorted_teams)]
 
+    async def get_detailed_leaderboard(
+        self, contest_id: str, requesting_user_id: str
+    ) -> list[dict]:
+        """
+        Organizer-only enriched leaderboard: adds bidding efficiency and
+        submission presence metadata for each team.
+
+        Returns a list of dicts shaped to populate DetailedLeaderboardEntryData.
+        """
+        contest = await self.get_contest(contest_id)
+        if contest.created_by != requesting_user_id:
+            raise NotTeamCreatorException(
+                message="Only the contest creator can view the detailed leaderboard"
+            )
+
+        ranked = await self.get_contest_leaderboard(contest_id)
+        if not ranked:
+            return []
+
+        team_ids = [tc.team_id for _, tc in ranked]
+        name_by_id = dict(
+            await self._team_contest_dao.get_registered_teams(contest_id)
+        )
+        stats_by_team = await self._team_contest_dao.get_leaderboard_stats(
+            contest_id=contest_id, team_ids=team_ids
+        )
+
+        rows: list[dict] = []
+        for rank, tc in ranked:
+            stats = stats_by_team.get(tc.team_id, {})
+            problems_won: int = stats.get("problems_won", 0)
+            total_spent: int = stats.get("total_currency_spent", 0)
+            attempted_ids: list[str] = stats.get("attempted_problem_ids", [])
+            solved_ids: list[str] = stats.get("solved_problem_ids", [])
+
+            avg_bid = (total_spent / problems_won) if problems_won else 0.0
+            points_per_credit = (
+                (tc.score / total_spent) if total_spent else float(tc.score)
+            )
+
+            rows.append(
+                {
+                    "rank": rank,
+                    "team_id": tc.team_id,
+                    "team_name": name_by_id.get(tc.team_id, ""),
+                    "score": tc.score,
+                    "currency": tc.currency,
+                    "problems_won": problems_won,
+                    "problems_solved": len(solved_ids),
+                    "total_currency_spent": total_spent,
+                    "avg_bid": round(avg_bid, 2),
+                    "points_per_credit": round(points_per_credit, 4),
+                    "has_any_submission": bool(attempted_ids),
+                    "attempted_problem_ids": attempted_ids,
+                    "solved_problem_ids": solved_ids,
+                }
+            )
+        return rows
+
     async def list_registered_teams(
         self, contest_id: str
     ) -> list[tuple[str, str]]:

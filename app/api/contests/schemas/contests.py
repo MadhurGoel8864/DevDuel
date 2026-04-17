@@ -135,8 +135,27 @@ class LeaderboardEntryData(BaseSchema):
 
     rank: int
     team_id: str
+    team_name: str = ""
     score: int
     currency: int
+
+
+class DetailedLeaderboardEntryData(BaseSchema):
+    """Enriched leaderboard row for the organizer post-contest view."""
+
+    rank: int
+    team_id: str
+    team_name: str = ""
+    score: int
+    currency: int
+    problems_won: int = 0
+    problems_solved: int = 0
+    total_currency_spent: int = 0
+    avg_bid: float = 0.0
+    points_per_credit: float = 0.0
+    has_any_submission: bool = False
+    attempted_problem_ids: list[str] = []
+    solved_problem_ids: list[str] = []
 
 
 # ── User Registration Check ───────────────────────────────────────────────────
@@ -158,4 +177,5 @@ ContestListResponse = APIResponse[list[ContestSummaryData]]
 ContestPaginatedListResponse = PaginatedResponse[ContestSummaryData]
 TeamContestDetailResponse = APIResponse[TeamContestDetailData]
 LeaderboardResponse = APIResponse[list[LeaderboardEntryData]]
+DetailedLeaderboardResponse = APIResponse[list[DetailedLeaderboardEntryData]]
 UserRegistrationCheckResponse = APIResponse[UserRegistrationCheckData]
