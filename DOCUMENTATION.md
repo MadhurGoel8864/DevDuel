@@ -13,6 +13,7 @@
 5. [Database Schema](#database-schema)
 6. [API Reference](#api-reference)
 7. [Configuration](#configuration)
+# Update
 
 ---
 
