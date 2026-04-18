@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     BIDDING_REDIS_PUBSUB_ENABLED: bool = Field(default=False)
 
+    # Minimum milliseconds between consecutive bids from the same user on the same auction.
+    # Server-side rate limit; kept conservative so fast bid wars are still possible.
+    BID_COOLDOWN_MS: int = Field(default=800)
+
     # SMTP Email Configuration (Optional - required only if using email service)
     smtp_host: str = Field(default="smtp.gmail.com")
     smtp_port: int = Field(default=587)

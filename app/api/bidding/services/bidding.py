@@ -25,11 +25,13 @@ from app.api.teams.dao.teams import (
     get_team_member_dao,
 )
 from app.core.enums import AuctionStatus, ContestStatus, TeamRole
+from app.core.config import settings
 from app.core.exceptions.bidding import (
     AuctionAlreadyActiveException,
     AuctionExpiredException,
     AuctionNotActiveException,
     AuctionNotFoundException,
+    BidRateLimitedException,
     BidTooLowException,
     InsufficientCurrencyException,
     NoProblemAvailableException,
@@ -51,6 +53,7 @@ logger = logging.getLogger(__name__)
 _HIGHEST_BID_KEY = "auction:{auction_id}:highest_bid"
 _HIGHEST_TEAM_KEY = "auction:{auction_id}:highest_team"
 _LOCK_KEY = "auction:{auction_id}:lock"
+_COOLDOWN_KEY = "auction:{auction_id}:cooldown:{user_id}"
 _LOCK_TTL = 5  # seconds — lock auto-expires to prevent deadlocks
 
 
@@ -64,6 +67,10 @@ def _team_key(auction_id: str) -> str:
 
 def _lock_key(auction_id: str) -> str:
     return _LOCK_KEY.format(auction_id=auction_id)
+
+
+def _cooldown_key(auction_id: str, user_id: str) -> str:
+    return _COOLDOWN_KEY.format(auction_id=auction_id, user_id=user_id)
 
 
 def _now_iso() -> str:
@@ -431,7 +438,23 @@ class BiddingService:
                 available=team_contest.currency,
             )
 
-        # 4–6. Redis lock → check → update
+        # 6. Per-user per-auction cooldown (server-side rate limit). Fails fast
+        # before touching the heavier per-auction lock. Scoped per (user, auction)
+        # so two bidders on different teams in the same auction don't throttle
+        # each other, and a new auction starts with a fresh window.
+        cooldown_key = _cooldown_key(auction_id, user_id)
+        acquired_cooldown = await self._redis.set(
+            cooldown_key, "1", nx=True, px=settings.BID_COOLDOWN_MS
+        )
+        if not acquired_cooldown:
+            ttl_ms = await self._redis.pttl(cooldown_key)
+            # pttl returns -2 (missing) / -1 (no expiry) — fall back to full window
+            retry_after_ms = (
+                ttl_ms if ttl_ms and ttl_ms > 0 else settings.BID_COOLDOWN_MS
+            )
+            raise BidRateLimitedException(retry_after_ms=retry_after_ms)
+
+        # 7. Redis lock → check → update
         lock_key = _lock_key(auction_id)
         lock_identifier = str(uuid.uuid4())
 

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.enums import ContestStatus
 from app.core.responses import APIResponse, PaginatedResponse
@@ -22,6 +22,7 @@ class ContestCreateData(BaseSchema):
     description: Optional[str] = None
     start_time: datetime
     end_time: datetime
+    starting_currency: int = Field(default=1000, ge=1, le=10_000)
 
 
 class ContestCreateRequest(BaseSchema):
@@ -43,6 +44,7 @@ class ContestEditData(BaseSchema):
     description: Optional[str] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+    starting_currency: Optional[int] = Field(default=None, ge=1, le=10_000)
 
 
 class ContestEditRequest(BaseSchema):
@@ -70,6 +72,7 @@ class ContestResponseData(BaseSchema, ISTDatetimeMixin):
     end_time: datetime
     status: ContestStatus
     created_by: str
+    starting_currency: int
     teams: list[TeamContestResponseData] = []
     created_at: datetime
     updated_at: datetime
@@ -85,6 +88,7 @@ class ContestSummaryData(BaseSchema, ISTDatetimeMixin):
     end_time: datetime
     status: ContestStatus
     created_by: str
+    starting_currency: int
     created_at: datetime
     team_count: int = 0
 
@@ -100,6 +104,7 @@ class ContestSummaryData(BaseSchema, ISTDatetimeMixin):
                 "end_time": data.end_time,
                 "status": data.status,
                 "created_by": data.created_by,
+                "starting_currency": data.starting_currency,
                 "created_at": data.created_at,
                 "team_count": len(data.teams),
             }

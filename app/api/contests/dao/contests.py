@@ -29,6 +29,7 @@ class ContestDAO:
         end_time: object,
         created_by: str,
         description: Optional[str] = None,
+        starting_currency: int = 1000,
     ) -> Contest:
         try:
             contest = Contest(
@@ -37,6 +38,7 @@ class ContestDAO:
                 start_time=start_time,
                 end_time=end_time,
                 created_by=created_by,
+                starting_currency=starting_currency,
             )
             self._session.add(contest)
             await self._session.commit()
@@ -189,6 +191,7 @@ class ContestDAO:
         description: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
+        starting_currency: Optional[int] = None,
     ) -> Contest:
         """
         Partial update — only provided (non-None) fields are applied.
@@ -200,6 +203,8 @@ class ContestDAO:
                 contest.description = description
             contest.start_time = start_time
             contest.end_time = end_time
+            if starting_currency is not None:
+                contest.starting_currency = starting_currency
 
             self._session.add(contest)
             await self._session.commit()
@@ -217,9 +222,15 @@ class TeamContestDAO:
     def __init__(self, session: AsyncSession):
         self._session = session
 
-    async def register(self, team_id: str, contest_id: str) -> TeamContest:
+    async def register(
+        self, team_id: str, contest_id: str, starting_currency: int
+    ) -> TeamContest:
         try:
-            registration = TeamContest(team_id=team_id, contest_id=contest_id)
+            registration = TeamContest(
+                team_id=team_id,
+                contest_id=contest_id,
+                currency=starting_currency,
+            )
             self._session.add(registration)
             await self._session.commit()
             await self._session.refresh(registration)

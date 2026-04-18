@@ -119,15 +119,23 @@ class MemberAlreadyInActiveContestException(AppException):
 
 class ContestEditNotAllowedException(AppException):
     """
-    Raised when the creator tries to edit a contest that has already ENDED.
-    HTTP 403.
+    Raised when the creator tries to edit a contest in a state that disallows
+    the requested change. Default case: contest has already ENDED. HTTP 403.
     """
 
-    def __init__(self, contest_id: Optional[str] = None):
-        details = {"contest_id": contest_id} if contest_id else None
+    def __init__(
+        self,
+        contest_id: Optional[str] = None,
+        reason: Optional[str] = None,
+    ):
+        details: dict = {}
+        if contest_id:
+            details["contest_id"] = contest_id
+        if reason:
+            details["reason"] = reason
         super().__init__(
             code="CONTEST_EDIT_NOT_ALLOWED",
-            message="Cannot edit a contest that has already ended",
+            message=reason or "Cannot edit a contest that has already ended",
             status_code=403,
-            details=details,
+            details=details or None,
         )

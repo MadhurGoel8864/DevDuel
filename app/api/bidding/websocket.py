@@ -200,13 +200,21 @@ async def bidding_ws_endpoint(
                 except Exception as exc:
                     error_msg = getattr(exc, "message", str(exc))
                     error_code = getattr(exc, "code", "UNKNOWN")
+                    error_details = getattr(exc, "details", None)
                     logger.warning(
                         f"[WS:PLACE_BID:REJECTED] contest={contest_id} | auction={auction_id} | "
                         f"team={team_id} | user={authenticated_user_id} | amount={amount} | "
                         f"code={error_code} | reason={error_msg}"
                     )
                     await websocket.send_text(
-                        json.dumps({"type": "ERROR", "message": error_msg})
+                        json.dumps(
+                            {
+                                "type": "ERROR",
+                                "code": error_code,
+                                "message": error_msg,
+                                "details": error_details,
+                            }
+                        )
                     )
 
             # ── FINISH_AUCTION (manual override — organizer only) ─────────────

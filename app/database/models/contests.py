@@ -38,6 +38,8 @@ class Contest(Base, TimestampMixin):
         nullable=False,
     )
 
+    starting_currency = mapped_column(Integer, default=1000, nullable=False)
+
     teams = relationship(
         "TeamContest",
         back_populates="contest",

@@ -152,3 +152,17 @@ class AuctionExpiredException(AppException):
             status_code=400,
             details=details,
         )
+
+
+class BidRateLimitedException(AppException):
+    """Raised when a user places bids faster than the allowed cooldown. HTTP 429."""
+
+    def __init__(self, retry_after_ms: int):
+        super().__init__(
+            code="BID_RATE_LIMITED",
+            message=(
+                f"Bidding too fast. Please wait {retry_after_ms} ms before the next bid."
+            ),
+            status_code=429,
+            details={"retry_after_ms": retry_after_ms},
+        )

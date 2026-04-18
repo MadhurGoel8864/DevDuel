@@ -77,6 +77,7 @@ class ContestService:
         end_time: datetime,
         created_by: str,
         description: Optional[str] = None,
+        starting_currency: int = 1000,
     ) -> Contest:
         """
         Create a new contest. Starts in DRAFT status.
@@ -87,6 +88,7 @@ class ContestService:
             end_time: Contest end datetime.
             created_by: User ID of the creator (used for admin checks).
             description: Optional description.
+            starting_currency: Per-team starting purse for this contest.
 
         Returns:
             Created Contest instance.
@@ -98,6 +100,7 @@ class ContestService:
             start_time=start_time,
             end_time=end_time,
             created_by=created_by,
+            starting_currency=starting_currency,
         )
         logger.info(f"Contest '{name}' created with id {contest.id}")
         return contest
@@ -198,6 +201,7 @@ class ContestService:
         description: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
+        starting_currency: Optional[int] = None,
     ) -> tuple[Contest, dict]:
         """
         Partially update a contest. Only provided fields are changed.
@@ -205,6 +209,7 @@ class ContestService:
         Rules:
           - Only the contest creator can edit.
           - Cannot edit a contest with ENDED status.
+          - starting_currency is only editable while contest is in DRAFT.
           - At least one field must be provided.
 
         Returns:
@@ -226,8 +231,23 @@ class ContestService:
         if contest.status == ContestStatus.ENDED:
             raise ContestEditNotAllowedException(contest_id=contest_id)
 
+        if (
+            starting_currency is not None
+            and contest.status != ContestStatus.DRAFT
+        ):
+            raise ContestEditNotAllowedException(
+                contest_id=contest_id,
+                reason=(
+                    "Starting currency can only be changed while the "
+                    "contest is in DRAFT status"
+                ),
+            )
+
         # At least one field must be provided
-        if all(v is None for v in [name, description, start_time, end_time]):
+        if all(
+            v is None
+            for v in [name, description, start_time, end_time, starting_currency]
+        ):
 
             raise BadRequestException(message="No fields provided to update")
 
@@ -237,6 +257,7 @@ class ContestService:
             "description": contest.description,
             "start_time": contest.start_time,
             "end_time": contest.end_time,
+            "starting_currency": contest.starting_currency,
         }
 
         # Apply update
@@ -246,6 +267,7 @@ class ContestService:
             description=description,
             start_time=start_time,
             end_time=end_time,
+            starting_currency=starting_currency,
         )
 
         # Build diff — only fields that actually changed
@@ -254,6 +276,7 @@ class ContestService:
             "description": updated.description,
             "start_time": updated.start_time,
             "end_time": updated.end_time,
+            "starting_currency": updated.starting_currency,
         }
 
         diff = {}
@@ -350,7 +373,9 @@ class ContestService:
             raise MemberAlreadyInActiveContestException(team_id=team_id)
 
         registration = await self._team_contest_dao.register(
-            team_id=team_id, contest_id=contest_id
+            team_id=team_id,
+            contest_id=contest_id,
+            starting_currency=contest.starting_currency,
         )
         logger.info(f"Team {team_id} registered for contest {contest_id}")
         return registration
