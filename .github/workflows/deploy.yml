@@ -25,9 +25,25 @@ jobs:
 
           # ===== FRONTEND =====
           cd ~/DevDual-Frontend || exit 1
+
+          # 🔥 FORCE BASH + LOAD NVM PROPERLY
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+          # Load default node version
+          nvm use default
+
+          # Debug (keep for now)
+          echo "Node path: $(which node)"
+          echo "NPM path: $(which npm)"
+          node -v
+          npm -v
+
+          # Continue deployment
           git pull origin master
           npm install
           npm run build
+
           sudo cp -r dist/* /var/www/devduel/
           sudo systemctl restart nginx
 
