@@ -206,3 +206,88 @@ class TeamNotReadyForSwapException(AppException):
 # NOTE: TeamInviteExpiredException and TeamInviteConsumedException from the DB
 # approach are no longer needed — Redis returns None for both expired and
 # consumed tokens, and TeamInviteInvalidException covers both cases.
+
+
+# ── Join Request Exceptions ────────────────────────────────────────────────────
+
+
+class JoinRequestAlreadyPendingException(AppException):
+    """Raised when a user already has a PENDING join request. HTTP 409."""
+
+    def __init__(self, team_id: Optional[str] = None):
+        super().__init__(
+            code="JOIN_REQUEST_ALREADY_PENDING",
+            message=(
+                "You already have a pending join request. "
+                "Cancel it before sending a new one."
+            ),
+            status_code=409,
+            details={"team_id": team_id} if team_id else None,
+        )
+
+
+class JoinRequestNotFoundException(AppException):
+    """Raised when a join request is not found. HTTP 404."""
+
+    def __init__(self, request_id: Optional[str] = None):
+        super().__init__(
+            code="JOIN_REQUEST_NOT_FOUND",
+            message=(
+                f"Join request '{request_id}' not found"
+                if request_id
+                else "Join request not found"
+            ),
+            status_code=404,
+            details={"request_id": request_id} if request_id else None,
+        )
+
+
+class JoinRequestAlreadyResolvedException(AppException):
+    """Raised when accept/reject/cancel is called on a non-PENDING request. HTTP 409."""
+
+    def __init__(self, status: Optional[str] = None):
+        super().__init__(
+            code="JOIN_REQUEST_ALREADY_RESOLVED",
+            message=(
+                f"Join request is already {status.lower()}"
+                if status
+                else "Join request is already resolved"
+            ),
+            status_code=409,
+            details={"status": status} if status else None,
+        )
+
+
+class TeamHasNoOpenSlotsException(AppException):
+    """Raised when attempting to request a team that has no open role slots. HTTP 409."""
+
+    def __init__(self, team_id: Optional[str] = None):
+        super().__init__(
+            code="TEAM_HAS_NO_OPEN_SLOTS",
+            message="This team has no open role slots.",
+            status_code=409,
+            details={"team_id": team_id} if team_id else None,
+        )
+
+
+class CannotRequestOwnTeamException(AppException):
+    """Raised when a team creator tries to send a join request to their own team. HTTP 400."""
+
+    def __init__(self, team_id: Optional[str] = None):
+        super().__init__(
+            code="CANNOT_REQUEST_OWN_TEAM",
+            message="You cannot send a join request to your own team.",
+            status_code=400,
+            details={"team_id": team_id} if team_id else None,
+        )
+
+
+class JoinRequestPermissionDeniedException(AppException):
+    """Raised when a user tries to act on a join request they don't own/manage. HTTP 403."""
+
+    def __init__(self, message: Optional[str] = None):
+        super().__init__(
+            code="JOIN_REQUEST_PERMISSION_DENIED",
+            message=message or "You are not allowed to act on this join request.",
+            status_code=403,
+        )

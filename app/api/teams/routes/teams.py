@@ -9,6 +9,15 @@ from app.api.teams.handlers.team_invites import (
     send_invite_handler,
     validate_invite_handler,
 )
+from app.api.teams.handlers.team_join_requests import (
+    accept_join_request_handler,
+    browse_teams_handler,
+    cancel_join_request_handler,
+    list_my_join_requests_handler,
+    list_team_join_requests_handler,
+    reject_join_request_handler,
+    send_join_request_handler,
+)
 from app.api.teams.handlers.teams import (
     add_member_handler,
     can_join_contest_handler,
@@ -77,6 +86,37 @@ router.add_api_route(
     description="Send invite to email. Works for registered and new users.",
 )
 
+# ── Join Requests ──────────────────────────────────────────────────────────────
+# NOTE: /join-requests/* must be declared BEFORE /{team_id} to avoid path capture
+router.add_api_route(
+    "/join-requests/browse",
+    browse_teams_handler,
+    methods=["GET"],
+    summary="Browse Teams to Join",
+    description="Paginated list of teams the user is not in. Includes open-slot info.",
+)
+router.add_api_route(
+    "/join-requests/me",
+    list_my_join_requests_handler,
+    methods=["GET"],
+    summary="My Join Request History",
+)
+router.add_api_route(
+    "/join-requests",
+    send_join_request_handler,
+    methods=["POST"],
+    status_code=201,
+    summary="Send Join Request",
+    description="Auto-assigns role to whichever slot is open in the target team.",
+)
+router.add_api_route(
+    "/join-requests/{request_id}/cancel",
+    cancel_join_request_handler,
+    methods=["POST"],
+    summary="Cancel Join Request",
+    description="Cancellable by the requester or the team leader.",
+)
+
 # ── Status / role / pre-check ──────────────────────────────────────────────────
 router.add_api_route("/{team_id}/status", get_team_status_handler, methods=["GET"])
 router.add_api_route("/{team_id}/my-role", get_my_role_handler, methods=["GET"])
@@ -96,6 +136,29 @@ router.add_api_route(
         "Creator must delete the team instead. "
         "If team is in an open/active contest, it is marked inactive."
     ),
+)
+
+# ── Team-scoped Join Request actions ───────────────────────────────────────────
+router.add_api_route(
+    "/{team_id}/join-requests",
+    list_team_join_requests_handler,
+    methods=["GET"],
+    summary="List Pending Join Requests",
+    description="Team creator only.",
+)
+router.add_api_route(
+    "/{team_id}/join-requests/{request_id}/accept",
+    accept_join_request_handler,
+    methods=["POST"],
+    summary="Accept Join Request",
+    description="Team creator only. Adds the requester as a member and emails them.",
+)
+router.add_api_route(
+    "/{team_id}/join-requests/{request_id}/reject",
+    reject_join_request_handler,
+    methods=["POST"],
+    summary="Reject Join Request",
+    description="Team creator only. No email is sent to the requester.",
 )
 
 router.add_api_route(

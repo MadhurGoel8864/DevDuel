@@ -25,6 +25,15 @@ class TeamRole(str, Enum):
     CODING = "CODING"
 
 
+class JoinRequestStatus(str, Enum):
+    """Lifecycle status for a TeamJoinRequest."""
+
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+
 class ContestStatus(str, Enum):
     """Lifecycle status for a Contest."""
 
