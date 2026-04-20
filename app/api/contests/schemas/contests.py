@@ -23,6 +23,7 @@ class ContestCreateData(BaseSchema):
     start_time: datetime
     end_time: datetime
     starting_currency: int = Field(default=1000, ge=1, le=10_000)
+    allowed_email_domain: Optional[str] = None
 
 
 class ContestCreateRequest(BaseSchema):
@@ -45,6 +46,7 @@ class ContestEditData(BaseSchema):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     starting_currency: Optional[int] = Field(default=None, ge=1, le=10_000)
+    allowed_email_domain: Optional[str] = None
 
 
 class ContestEditRequest(BaseSchema):
@@ -73,6 +75,7 @@ class ContestResponseData(BaseSchema, ISTDatetimeMixin):
     status: ContestStatus
     created_by: str
     starting_currency: int
+    allowed_email_domain: Optional[str] = None
     teams: list[TeamContestResponseData] = []
     created_at: datetime
     updated_at: datetime
@@ -89,6 +92,7 @@ class ContestSummaryData(BaseSchema, ISTDatetimeMixin):
     status: ContestStatus
     created_by: str
     starting_currency: int
+    allowed_email_domain: Optional[str] = None
     created_at: datetime
     team_count: int = 0
 
@@ -105,6 +109,7 @@ class ContestSummaryData(BaseSchema, ISTDatetimeMixin):
                 "status": data.status,
                 "created_by": data.created_by,
                 "starting_currency": data.starting_currency,
+                "allowed_email_domain": data.allowed_email_domain,
                 "created_at": data.created_at,
                 "team_count": len(data.teams),
             }

@@ -1,6 +1,7 @@
 """Bidding Data Access Object — raw database queries only."""
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.enums import AssignmentStatus, AuctionStatus
 from app.database.models.bidding import Bid, ContestProblemAssignment, ProblemAuction
-from app.database.models.contests import TeamContest
+from app.database.models.contests import ContestTabSwitch, TeamContest
 from app.database.models.problems import ContestProblem
 
 logger = logging.getLogger(__name__)
@@ -341,6 +342,50 @@ class BiddingDAO:
             await self._session.rollback()
             logger.error(f"Atomic finish failed for auction {auction_id}: {e}")
             raise
+
+
+    # ── Tab Switch ────────────────────────────────────────────────────────────
+
+    async def upsert_tab_switch(
+        self, contest_id: str, team_id: str, user_id: str
+    ) -> ContestTabSwitch:
+        """Increment the tab-switch counter for a user in a contest (upsert)."""
+        try:
+            result = await self._session.execute(
+                select(ContestTabSwitch).where(
+                    ContestTabSwitch.contest_id == contest_id,
+                    ContestTabSwitch.user_id == user_id,
+                )
+            )
+            record = result.scalar_one_or_none()
+            now = datetime.now(timezone.utc)
+            if record:
+                record.switch_count += 1
+                record.last_switched_at = now
+            else:
+                record = ContestTabSwitch(
+                    contest_id=contest_id,
+                    team_id=team_id,
+                    user_id=user_id,
+                    switch_count=1,
+                    last_switched_at=now,
+                )
+                self._session.add(record)
+            await self._session.commit()
+            await self._session.refresh(record)
+            return record
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"upsert_tab_switch failed for user={user_id} contest={contest_id}: {e}")
+            raise
+
+    async def get_tab_switches_for_contest(
+        self, contest_id: str
+    ) -> list[ContestTabSwitch]:
+        result = await self._session.execute(
+            select(ContestTabSwitch).where(ContestTabSwitch.contest_id == contest_id)
+        )
+        return list(result.scalars().all())
 
 
 # ── Dependency ─────────────────────────────────────────────────────────────────

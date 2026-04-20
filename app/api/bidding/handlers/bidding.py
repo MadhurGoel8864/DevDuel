@@ -13,6 +13,9 @@ from app.api.bidding.schemas.bidding import (
     AuctionResultData,
     AuctionResultResponse,
     StartAuctionRequest,
+    TabSwitchRequest,
+    TabSwitchResponse,
+    TabSwitchResponseData,
 )
 from app.api.bidding.services.bidding import BiddingService, get_bidding_service
 from app.core.exceptions.bidding import AuctionNotFoundException
@@ -138,6 +141,25 @@ async def get_auction_result_handler(
             status=auction.status,
         )
     )
+
+
+async def tab_switch_handler(
+    contest_id: str = Path(..., description="Contest ID"),
+    request: TabSwitchRequest = Body(...),
+    current_user: UserWithPermissions = Depends(get_current_user),
+    bidding_service: BiddingService = Depends(get_bidding_service),
+) -> TabSwitchResponse:
+    """Record a tab switch for the authenticated participant and notify organizers."""
+    logger.info(
+        f"[TAB_SWITCH] user={current_user.user_id} | "
+        f"contest={contest_id} | team={request.data.team_id}"
+    )
+    result = await bidding_service.record_tab_switch(
+        contest_id=contest_id,
+        team_id=request.data.team_id,
+        user_id=current_user.user_id,
+    )
+    return TabSwitchResponse(data=TabSwitchResponseData(**result))
 
 
 async def force_end_auction_handler(

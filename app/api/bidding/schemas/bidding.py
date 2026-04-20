@@ -90,8 +90,25 @@ class AssignmentResponseData(BaseSchema):
     created_at: datetime
 
 
+# ── Tab Switch Schemas ─────────────────────────────────────────────────────────
+
+
+class TabSwitchData(BaseSchema):
+    team_id: str
+
+
+class TabSwitchRequest(BaseSchema):
+    data: TabSwitchData
+
+
+class TabSwitchResponseData(BaseSchema):
+    team_id: str
+    switch_count: int
+
+
 # ── Response Aliases ───────────────────────────────────────────────────────────
 
 AuctionResponse = APIResponse[AuctionResponseData]
 AuctionListResponse = APIResponse[List[AuctionResponseData]]
 AuctionResultResponse = APIResponse[AuctionResultData]
+TabSwitchResponse = APIResponse[TabSwitchResponseData]

@@ -30,6 +30,7 @@ class ContestDAO:
         created_by: str,
         description: Optional[str] = None,
         starting_currency: int = 1000,
+        allowed_email_domain: Optional[str] = None,
     ) -> Contest:
         try:
             contest = Contest(
@@ -39,6 +40,7 @@ class ContestDAO:
                 end_time=end_time,
                 created_by=created_by,
                 starting_currency=starting_currency,
+                allowed_email_domain=allowed_email_domain,
             )
             self._session.add(contest)
             await self._session.commit()
@@ -192,9 +194,12 @@ class ContestDAO:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         starting_currency: Optional[int] = None,
+        allowed_email_domain: Optional[str] = None,
+        clear_email_domain: bool = False,
     ) -> Contest:
         """
         Partial update — only provided (non-None) fields are applied.
+        Pass clear_email_domain=True to explicitly set the field to None.
         Returns the updated Contest instance.
         """
         try:
@@ -205,6 +210,10 @@ class ContestDAO:
             contest.end_time = end_time
             if starting_currency is not None:
                 contest.starting_currency = starting_currency
+            if clear_email_domain:
+                contest.allowed_email_domain = None
+            elif allowed_email_domain is not None:
+                contest.allowed_email_domain = allowed_email_domain
 
             self._session.add(contest)
             await self._session.commit()

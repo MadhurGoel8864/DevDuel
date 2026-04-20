@@ -11,6 +11,7 @@ from app.api.bidding.handlers.bidding import (
     get_auction_result_handler,
     get_current_auction_handler,
     start_auction_handler,
+    tab_switch_handler,
 )
 from app.api.bidding.services.bidding import BiddingService, get_bidding_service
 from app.api.bidding.websocket import bidding_ws_endpoint
@@ -62,6 +63,15 @@ router.add_api_route(
     methods=["POST"],
     summary="Force End Auction",
     description="Immediately end an active auction. Organizer of the contest only.",
+)
+
+router.add_api_route(
+    "/contests/{contest_id}/tab-switch",
+    tab_switch_handler,
+    methods=["POST"],
+    status_code=200,
+    summary="Record Tab Switch",
+    description="Record a tab visibility change for a contest participant. Notifies organizers via WebSocket.",
 )
 
 # ── WebSocket Endpoint ─────────────────────────────────────────────────────────

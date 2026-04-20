@@ -41,6 +41,8 @@ class Contest(Base, TimestampMixin):
 
     starting_currency = mapped_column(Integer, default=1000, nullable=False)
 
+    allowed_email_domain = mapped_column(String(253), nullable=True)
+
     teams = relationship(
         "TeamContest",
         back_populates="contest",

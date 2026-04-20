@@ -679,6 +679,42 @@ class BiddingService:
 
         return await self._dao.get_auction_by_id(auction_id)
 
+    # ── Tab Switch ────────────────────────────────────────────────────────────
+
+    async def record_tab_switch(
+        self, contest_id: str, team_id: str, user_id: str
+    ) -> dict:
+        """
+        Increment the tab-switch counter for a participant and notify organizers.
+
+        Upserts the ContestTabSwitch row, then broadcasts PARTICIPANT_TAB_SWITCH
+        to the contest WebSocket room so the organizer dashboard can show a toast.
+        """
+        record = await self._dao.upsert_tab_switch(
+            contest_id=contest_id, team_id=team_id, user_id=user_id
+        )
+
+        team = await self._team_dao.get_by_id(team_id)
+        team_name = team.name if team else team_id[:8]
+
+        await fanout_bidding_event(
+            contest_id=contest_id,
+            payload={
+                "type": "PARTICIPANT_TAB_SWITCH",
+                "server_time": _now_iso(),
+                "team_id": team_id,
+                "team_name": team_name,
+                "user_id": user_id,
+                "switch_count": record.switch_count,
+            },
+        )
+
+        logger.info(
+            f"Tab switch recorded: user={user_id} team={team_id} "
+            f"contest={contest_id} count={record.switch_count}"
+        )
+        return {"team_id": team_id, "switch_count": record.switch_count}
+
     # ── Get Auction Result ─────────────────────────────────────────────────────
 
     async def get_auction_result(self, auction_id: str) -> ProblemAuction:

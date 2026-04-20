@@ -21,6 +21,7 @@ from app.core.exceptions.contests import (
     ContestAlreadyRegisteredException,
     ContestEditNotAllowedException,
     ContestNotFoundException,
+    EmailDomainNotAllowedException,
     InvalidContestStateTransition,
     MemberAlreadyInActiveContestException,
     MemberAlreadyInContestException,
@@ -78,6 +79,7 @@ class ContestService:
         created_by: str,
         description: Optional[str] = None,
         starting_currency: int = 1000,
+        allowed_email_domain: Optional[str] = None,
     ) -> Contest:
         """
         Create a new contest. Starts in DRAFT status.
@@ -89,6 +91,8 @@ class ContestService:
             created_by: User ID of the creator (used for admin checks).
             description: Optional description.
             starting_currency: Per-team starting purse for this contest.
+            allowed_email_domain: Optional domain restriction (e.g. "akgec.ac.in").
+                                   If set, only emails ending with @domain may register.
 
         Returns:
             Created Contest instance.
@@ -101,6 +105,7 @@ class ContestService:
             end_time=end_time,
             created_by=created_by,
             starting_currency=starting_currency,
+            allowed_email_domain=allowed_email_domain,
         )
         logger.info(f"Contest '{name}' created with id {contest.id}")
         return contest
@@ -202,6 +207,8 @@ class ContestService:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         starting_currency: Optional[int] = None,
+        allowed_email_domain: Optional[str] = None,
+        clear_email_domain: bool = False,
     ) -> tuple[Contest, dict]:
         """
         Partially update a contest. Only provided fields are changed.
@@ -210,6 +217,7 @@ class ContestService:
           - Only the contest creator can edit.
           - Cannot edit a contest with ENDED status.
           - starting_currency is only editable while contest is in DRAFT.
+          - allowed_email_domain is only editable while contest is in DRAFT.
           - At least one field must be provided.
 
         Returns:
@@ -243,12 +251,23 @@ class ContestService:
                 ),
             )
 
+        if (
+            (allowed_email_domain is not None or clear_email_domain)
+            and contest.status != ContestStatus.DRAFT
+        ):
+            raise ContestEditNotAllowedException(
+                contest_id=contest_id,
+                reason=(
+                    "Email domain restriction can only be changed while the "
+                    "contest is in DRAFT status"
+                ),
+            )
+
         # At least one field must be provided
         if all(
             v is None
-            for v in [name, description, start_time, end_time, starting_currency]
-        ):
-
+            for v in [name, description, start_time, end_time, starting_currency, allowed_email_domain]
+        ) and not clear_email_domain:
             raise BadRequestException(message="No fields provided to update")
 
         # Capture old values BEFORE updating for diff
@@ -258,6 +277,7 @@ class ContestService:
             "start_time": contest.start_time,
             "end_time": contest.end_time,
             "starting_currency": contest.starting_currency,
+            "allowed_email_domain": contest.allowed_email_domain,
         }
 
         # Apply update
@@ -268,6 +288,8 @@ class ContestService:
             start_time=start_time,
             end_time=end_time,
             starting_currency=starting_currency,
+            allowed_email_domain=allowed_email_domain,
+            clear_email_domain=clear_email_domain,
         )
 
         # Build diff — only fields that actually changed
@@ -277,6 +299,7 @@ class ContestService:
             "start_time": updated.start_time,
             "end_time": updated.end_time,
             "starting_currency": updated.starting_currency,
+            "allowed_email_domain": updated.allowed_email_domain,
         }
 
         diff = {}
@@ -371,6 +394,20 @@ class ContestService:
         )
         if in_active:
             raise MemberAlreadyInActiveContestException(team_id=team_id)
+
+        # Enforce email domain restriction if configured
+        if contest.allowed_email_domain:
+            domain = contest.allowed_email_domain.lower().strip()
+            members = await self._member_dao.get_by_team(team_id)
+            invalid_emails: list[str] = []
+            for member in members:
+                user = await self._user_dao.get_by_id(member.user_id)
+                if not user or not user.email or not user.email.lower().endswith(f"@{domain}"):
+                    invalid_emails.append(user.email if user and user.email else f"user:{member.user_id}")
+            if invalid_emails:
+                raise EmailDomainNotAllowedException(
+                    domain=domain, invalid_emails=invalid_emails
+                )
 
         registration = await self._team_contest_dao.register(
             team_id=team_id,

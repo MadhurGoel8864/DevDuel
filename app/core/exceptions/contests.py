@@ -139,3 +139,31 @@ class ContestEditNotAllowedException(AppException):
             status_code=403,
             details=details or None,
         )
+
+
+class EmailDomainNotAllowedException(AppException):
+    """
+    Raised when one or more team members' emails do not match the contest's
+    allowed_email_domain restriction. HTTP 403.
+    """
+
+    def __init__(
+        self,
+        domain: Optional[str] = None,
+        invalid_emails: Optional[list[str]] = None,
+    ):
+        details: dict = {}
+        if domain:
+            details["allowed_domain"] = domain
+        if invalid_emails:
+            details["invalid_emails"] = invalid_emails
+        super().__init__(
+            code="EMAIL_DOMAIN_NOT_ALLOWED",
+            message=(
+                f"All team members must have an email ending with @{domain}"
+                if domain
+                else "Team members do not meet the email domain requirement"
+            ),
+            status_code=403,
+            details=details or None,
+        )

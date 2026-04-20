@@ -73,6 +73,7 @@ async def create_contest_handler(
         end_time=request.data.end_time,
         created_by=current_user.user_id,
         starting_currency=request.data.starting_currency,
+        allowed_email_domain=request.data.allowed_email_domain,
     )
     logger.info(f"Contest '{contest.name}' created by user {current_user.user_id}")
     return ContestResponse(data=ContestResponseData.model_validate(contest))
@@ -102,6 +103,8 @@ async def edit_contest_handler(
         start_time=request.data.start_time,
         end_time=request.data.end_time,
         starting_currency=request.data.starting_currency,
+        allowed_email_domain=request.data.allowed_email_domain or None,
+        clear_email_domain=request.data.allowed_email_domain == "",
     )
 
     # Only send emails if something actually changed
