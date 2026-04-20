@@ -9,6 +9,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import mapped_column, relationship
+from datetime import datetime
 
 from app.core.enums import ContestStatus
 from app.database.models.base import Base
@@ -82,4 +83,20 @@ class TeamContest(Base, TimestampMixin):
         UniqueConstraint("team_id", "contest_id", name="uq_team_contest"),
         Index("ix_teamcontest_team_id", "team_id"),
         Index("ix_teamcontest_contest_id", "contest_id"),
+    )
+
+
+class ContestTabSwitch(Base, TimestampMixin):
+    __tablename__ = "contest_tab_switches"
+
+    id = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    contest_id = mapped_column(ForeignKey("contests.id", ondelete="CASCADE"), nullable=False)
+    team_id = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
+    user_id = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    switch_count = mapped_column(Integer, default=0, nullable=False)
+    last_switched_at = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("contest_id", "user_id", name="uq_contest_tab_switch_contest_user"),
+        Index("ix_contest_tab_switches_contest_id", "contest_id"),
     )
