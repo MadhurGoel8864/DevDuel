@@ -51,6 +51,13 @@ class Difficulty(str, Enum):
     HARD = "hard"
 
 
+class ProblemKind(str, Enum):
+    """Discriminator for ContestProblem: which problem table it references."""
+
+    BUILTIN = "builtin"
+    CUSTOM = "custom"
+
+
 class AuctionStatus(str, Enum):
     """Lifecycle status for a ProblemAuction."""
 

@@ -123,3 +123,77 @@ class NotContestOrganizerException(AppException):
             message=message or "Only the contest organizer can perform this action",
             status_code=403,
         )
+
+
+class CustomProblemNotFoundException(AppException):
+    """Raised when a custom (admin-authored) problem is not found. HTTP 404."""
+
+    def __init__(
+        self,
+        custom_problem_id: Optional[str] = None,
+        message: Optional[str] = None,
+    ):
+        details = (
+            {"custom_problem_id": custom_problem_id} if custom_problem_id else None
+        )
+        super().__init__(
+            code="CUSTOM_PROBLEM_NOT_FOUND",
+            message=message
+            or (
+                f"Custom problem with ID '{custom_problem_id}' not found"
+                if custom_problem_id
+                else "Custom problem not found"
+            ),
+            status_code=404,
+            details=details,
+        )
+
+
+class CustomProblemAccessDeniedException(AppException):
+    """Raised when an organizer touches a custom problem they do not own. HTTP 403."""
+
+    def __init__(
+        self,
+        custom_problem_id: Optional[str] = None,
+        message: Optional[str] = None,
+    ):
+        details = (
+            {"custom_problem_id": custom_problem_id} if custom_problem_id else None
+        )
+        super().__init__(
+            code="CUSTOM_PROBLEM_ACCESS_DENIED",
+            message=message or "You do not have access to this custom problem",
+            status_code=403,
+            details=details,
+        )
+
+
+class CustomProblemHasContestReferencesException(AppException):
+    """Raised when deleting a custom problem still attached to one or more contests.
+
+    HTTP 409. Returns the blocking contest IDs in ``details.contest_ids``.
+    """
+
+    def __init__(self, contest_ids: list[str]):
+        super().__init__(
+            code="CUSTOM_PROBLEM_HAS_CONTEST_REFERENCES",
+            message=(
+                "Cannot delete this problem because it is still attached to one "
+                "or more contests. Remove it from those contests first."
+            ),
+            status_code=409,
+            details={"contest_ids": contest_ids},
+        )
+
+
+class CustomProblemSlugConflictException(AppException):
+    """Raised when an owner-scoped slug cannot be made unique. HTTP 409."""
+
+    def __init__(self, slug: Optional[str] = None):
+        details = {"slug": slug} if slug else None
+        super().__init__(
+            code="CUSTOM_PROBLEM_SLUG_CONFLICT",
+            message="Could not generate a unique slug for this problem. Try a different title.",
+            status_code=409,
+            details=details,
+        )

@@ -193,7 +193,7 @@ class SubmissionService:
         language_id = SUPPORTED_LANGUAGES[language_lower]
         logger.debug(f"[submit] Language resolved: {language_lower} → id={language_id}")
 
-        # ── 5. Fetch test cases from GCS (via builtin problem) ─────────────────
+        # ── 5. Fetch test cases from GCS (via the underlying problem) ──────────
         contest_problem = await self._dao.get_contest_problem(contest_problem_id)
         if not contest_problem:
             logger.warning(
@@ -201,18 +201,22 @@ class SubmissionService:
             )
             raise NoTestCasesException()
 
-        # Test cases live on the builtin problem, not the contest problem
-        builtin_problem = contest_problem.problem
-        if not builtin_problem or not builtin_problem.test_cases_url:
+        # Test cases live on the underlying problem (built-in or custom).
+        # ``resolved_problem`` returns whichever side of the polymorphic
+        # ContestProblem is populated.
+        underlying_problem = contest_problem.resolved_problem
+        if not underlying_problem or not underlying_problem.test_cases_url:
             logger.warning(
-                f"[submit] No test cases URL on builtin problem for contest problem {contest_problem_id}"
+                f"[submit] No test cases URL on underlying problem for contest problem {contest_problem_id}"
             )
             raise NoTestCasesException()
 
-        logger.debug(f"[submit] Fetching test cases from: {builtin_problem.test_cases_url}")
+        logger.debug(
+            f"[submit] Fetching test cases from: {underlying_problem.test_cases_url}"
+        )
         try:
             test_cases = storage_service.download_test_cases_from_url(
-                builtin_problem.test_cases_url
+                underlying_problem.test_cases_url
             )
         except StorageError as e:
             logger.error(f"[submit] GCS download failed: {e}")

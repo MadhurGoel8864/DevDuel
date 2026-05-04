@@ -1,7 +1,6 @@
 """Test Cases Upload Handler"""
 
 import logging
-from typing import Optional
 
 from fastapi import Body, Depends, Path
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -11,6 +10,10 @@ from app.api.auth.schemas import UserWithPermissions
 from app.api.problems.dao.problems import (
     BuiltinProblemDAO,
     get_builtin_problem_dao,
+)
+from app.api.problems.services.problems import (
+    CustomProblemService,
+    get_custom_problem_service,
 )
 from app.core.exceptions.problems import (
     BuiltinProblemNotFoundException,
@@ -128,6 +131,72 @@ async def upload_test_cases_handler(
             problem_slug=problem.slug,
             test_cases_url=url,
             total_count=len(test_cases_raw),
+            sample_count=len(samples),
+        )
+    )
+
+
+async def upload_custom_test_cases_handler(
+    custom_problem_id: str = Path(..., description="Custom Problem ID"),
+    request: UploadTestCasesRequest = Body(...),
+    current_user: UserWithPermissions = Depends(require_organizer),
+    service: CustomProblemService = Depends(get_custom_problem_service),
+) -> UploadTestCasesResponse:
+    """Upload test cases for a custom (admin-authored) problem.
+
+    Replaces any existing test cases in GCS. Only the problem's owner may upload.
+    """
+    problem = await service.get_owned(current_user.user_id, custom_problem_id)
+
+    test_cases_raw = [tc.model_dump() for tc in request.data.test_cases]
+    logger.info(
+        f"[custom_test_cases] Uploading for problem {problem.id} "
+        f"(slug='{problem.slug}'), total={len(test_cases_raw)}"
+    )
+    url = storage_service.upload_custom_test_cases(problem.id, test_cases_raw)
+    await service.set_test_cases_url(problem, url)
+
+    samples = [tc for tc in test_cases_raw if tc.get("is_sample")]
+    return UploadTestCasesResponse(
+        data=UploadTestCasesResponseData(
+            problem_id=problem.id,
+            problem_slug=problem.slug,
+            test_cases_url=url,
+            total_count=len(test_cases_raw),
+            sample_count=len(samples),
+        )
+    )
+
+
+async def get_custom_test_cases_handler(
+    custom_problem_id: str = Path(..., description="Custom Problem ID"),
+    current_user: UserWithPermissions = Depends(require_organizer),
+    service: CustomProblemService = Depends(get_custom_problem_service),
+) -> GetTestCasesResponse:
+    """Fetch all test cases for a custom problem from GCS. Owner-only."""
+    problem = await service.get_owned(current_user.user_id, custom_problem_id)
+    if not problem.test_cases_url:
+        raise TestCasesNotFoundException(problem_id=problem.id)
+
+    try:
+        test_cases_raw = storage_service.download_test_cases_from_url(
+            problem.test_cases_url
+        )
+    except StorageError:
+        logger.error(
+            f"[custom_test_cases] Failed to download test cases for {problem.id}"
+        )
+        raise TestCasesNotFoundException(problem_id=problem.id)
+
+    test_cases = [GetTestCaseItem(**tc) for tc in test_cases_raw]
+    samples = [tc for tc in test_cases if tc.is_sample]
+
+    return GetTestCasesResponse(
+        data=GetTestCasesResponseData(
+            problem_id=problem.id,
+            problem_title=problem.title,
+            test_cases=test_cases,
+            total_count=len(test_cases),
             sample_count=len(samples),
         )
     )

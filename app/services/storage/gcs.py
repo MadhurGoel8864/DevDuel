@@ -89,8 +89,16 @@ class GCSStorageService:
         return self._bucket
 
     def _blob_path(self, problem_slug: str) -> str:
-        """Build the GCS blob path for a problem's test cases."""
+        """Build the GCS blob path for a built-in problem's test cases."""
         return f"problems/{problem_slug}/testcases.json"
+
+    def _custom_blob_path(self, custom_problem_id: str) -> str:
+        """Build the GCS blob path for a custom problem's test cases.
+
+        Keyed by ID rather than slug so that renaming a custom problem
+        (which regenerates the slug) does not orphan the test-case file.
+        """
+        return f"custom_problems/{custom_problem_id}/testcases.json"
 
     def upload_test_cases(
         self, problem_slug: str, test_cases: list[dict[str, Any]]
@@ -124,6 +132,44 @@ class GCSStorageService:
             logger.error(f"Failed to upload test cases for '{problem_slug}': {e}")
             raise StorageError(
                 f"Failed to upload test cases for '{problem_slug}': {e}"
+            ) from e
+
+    def upload_custom_test_cases(
+        self, custom_problem_id: str, test_cases: list[dict[str, Any]]
+    ) -> str:
+        """Upload test cases JSON for a custom problem to GCS.
+
+        Args:
+            custom_problem_id: The custom problem's ID (used as folder name).
+            test_cases: List of test case dicts with keys:
+                input, expected_output, is_sample.
+
+        Returns:
+            The gs:// URL of the uploaded file.
+
+        Raises:
+            StorageError: If the upload fails.
+        """
+        bucket = self._get_bucket()
+        blob_path = self._custom_blob_path(custom_problem_id)
+        blob = bucket.blob(blob_path)
+
+        try:
+            json_data = json.dumps(test_cases, ensure_ascii=False, indent=2)
+            blob.upload_from_string(json_data, content_type="application/json")
+
+            url = f"gs://{settings.GCS_BUCKET_NAME}/{blob_path}"
+            logger.info(
+                f"Uploaded custom test cases for problem '{custom_problem_id}' → {url}"
+            )
+            return url
+
+        except Exception as e:
+            logger.error(
+                f"Failed to upload custom test cases for '{custom_problem_id}': {e}"
+            )
+            raise StorageError(
+                f"Failed to upload custom test cases for '{custom_problem_id}': {e}"
             ) from e
 
     def download_test_cases(self, problem_slug: str) -> list[dict[str, Any]]:
