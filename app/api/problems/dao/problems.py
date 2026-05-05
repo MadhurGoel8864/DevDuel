@@ -25,9 +25,22 @@ class BuiltinProblemDAO:
     def __init__(self, session: AsyncSession):
         self._session = session
 
+    async def create(self, **fields: Any) -> BuiltinProblem:
+        bp = BuiltinProblem(**fields)
+        self._session.add(bp)
+        await self._session.commit()
+        await self._session.refresh(bp)
+        return bp
+
     async def get_by_id(self, builtin_problem_id: str) -> Optional[BuiltinProblem]:
         result = await self._session.execute(
             select(BuiltinProblem).where(BuiltinProblem.id == builtin_problem_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_slug(self, slug: str) -> Optional[BuiltinProblem]:
+        result = await self._session.execute(
+            select(BuiltinProblem).where(BuiltinProblem.slug == slug)
         )
         return result.scalar_one_or_none()
 
@@ -64,6 +77,27 @@ class BuiltinProblemDAO:
             query = query.where(BuiltinProblem.title.ilike(f"%{search}%"))
         result = await self._session.execute(query)
         return result.scalar_one()
+
+    async def update(self, problem: BuiltinProblem, **fields: Any) -> BuiltinProblem:
+        for field, value in fields.items():
+            setattr(problem, field, value)
+        self._session.add(problem)
+        await self._session.commit()
+        await self._session.refresh(problem)
+        return problem
+
+    async def set_test_cases_url(
+        self, problem: BuiltinProblem, url: str
+    ) -> BuiltinProblem:
+        problem.test_cases_url = url
+        self._session.add(problem)
+        await self._session.commit()
+        await self._session.refresh(problem)
+        return problem
+
+    async def delete(self, problem: BuiltinProblem) -> None:
+        await self._session.delete(problem)
+        await self._session.commit()
 
 
 class CustomProblemDAO:

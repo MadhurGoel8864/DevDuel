@@ -3,21 +3,23 @@
 import logging
 from typing import Optional
 
-from fastapi import Depends, Path, Query
+from fastapi import Body, Depends, Path, Query
 
-from app.api.auth.dependencies import get_current_user
+from app.api.auth.dependencies import get_current_user, require_organizer
 from app.api.auth.schemas import UserWithPermissions
 from app.api.problems.schemas.problems import (
+    BuiltinProblemCreateRequest,
     BuiltinProblemListResponse,
     BuiltinProblemResponse,
     BuiltinProblemResponseData,
+    BuiltinProblemUpdateRequest,
 )
 from app.api.problems.services.problems import (
     BuiltinProblemService,
     get_builtin_problem_service,
 )
 from app.core.enums import Difficulty
-from app.core.responses import MetaResponse
+from app.core.responses import APIResponse, MetaResponse
 
 logger = logging.getLogger(__name__)
 
@@ -53,3 +55,38 @@ async def get_builtin_problem_handler(
     return BuiltinProblemResponse(
         data=BuiltinProblemResponseData.model_validate(problem)
     )
+
+
+async def create_builtin_problem_handler(
+    request: BuiltinProblemCreateRequest = Body(...),
+    current_user: UserWithPermissions = Depends(require_organizer),
+    builtin_service: BuiltinProblemService = Depends(get_builtin_problem_service),
+) -> BuiltinProblemResponse:
+    """Create a new built-in (platform-curated) problem. Requires organizer role."""
+    problem = await builtin_service.create(data=request.data)
+    return BuiltinProblemResponse(
+        data=BuiltinProblemResponseData.model_validate(problem)
+    )
+
+
+async def update_builtin_problem_handler(
+    problem_id: str = Path(..., description="Built-in Problem ID"),
+    request: BuiltinProblemUpdateRequest = Body(...),
+    current_user: UserWithPermissions = Depends(require_organizer),
+    builtin_service: BuiltinProblemService = Depends(get_builtin_problem_service),
+) -> BuiltinProblemResponse:
+    """Update a built-in problem. Slug regenerates only on title change."""
+    updated = await builtin_service.update(problem_id=problem_id, data=request.data)
+    return BuiltinProblemResponse(
+        data=BuiltinProblemResponseData.model_validate(updated)
+    )
+
+
+async def delete_builtin_problem_handler(
+    problem_id: str = Path(..., description="Built-in Problem ID"),
+    current_user: UserWithPermissions = Depends(require_organizer),
+    builtin_service: BuiltinProblemService = Depends(get_builtin_problem_service),
+) -> APIResponse[dict]:
+    """Hard-delete a built-in problem. Contest references cascade automatically."""
+    await builtin_service.delete(problem_id=problem_id)
+    return APIResponse[dict](data={"id": problem_id})

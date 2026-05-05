@@ -15,6 +15,8 @@ from app.api.problems.dao.problems import (
     get_custom_problem_dao,
 )
 from app.api.problems.schemas.problems import (
+    BuiltinProblemCreateData,
+    BuiltinProblemUpdateData,
     CustomProblemCreateData,
     CustomProblemUpdateData,
     ImportProblemData,
@@ -23,6 +25,7 @@ from app.core.enums import Difficulty
 from app.core.exceptions.contests import ContestNotFoundException
 from app.core.exceptions.problems import (
     BuiltinProblemNotFoundException,
+    BuiltinProblemSlugConflictException,
     ContestProblemNotFoundException,
     CustomProblemAccessDeniedException,
     CustomProblemHasContestReferencesException,
@@ -43,10 +46,47 @@ logger = logging.getLogger(__name__)
 
 
 class BuiltinProblemService:
-    """Business logic for browsing built-in problems."""
+    """Business logic for built-in problems (browse + CRUD)."""
+
+    SLUG_RETRY_LIMIT = 5
 
     def __init__(self, builtin_problem_dao: BuiltinProblemDAO):
         self._builtin_dao = builtin_problem_dao
+
+    async def _generate_unique_slug(self, title: str) -> str:
+        """Generate a globally-unique slug from a title.
+
+        Tries the bare slug first; on conflict appends -2, -3 … up to SLUG_RETRY_LIMIT.
+        """
+        base = slugify(title)
+        candidate = base
+        for attempt in range(1, self.SLUG_RETRY_LIMIT + 1):
+            if attempt > 1:
+                candidate = f"{base}-{attempt}"
+            existing = await self._builtin_dao.get_by_slug(candidate)
+            if existing is None:
+                return candidate
+        raise BuiltinProblemSlugConflictException(slug=base)
+
+    async def create(self, data: BuiltinProblemCreateData) -> BuiltinProblem:
+        slug = await self._generate_unique_slug(data.title)
+        sample_io = [item.model_dump() for item in data.sample_io]
+        problem = await self._builtin_dao.create(
+            title=data.title,
+            slug=slug,
+            description=data.description,
+            input_format=data.input_format,
+            output_format=data.output_format,
+            constraints=data.constraints,
+            sample_io=sample_io,
+            difficulty=data.difficulty,
+            points=data.points,
+            base_price=data.base_price,
+            time_limit_ms=data.time_limit_ms,
+            memory_limit_mb=data.memory_limit_mb,
+        )
+        logger.info(f"Builtin problem created: id={problem.id} slug={slug}")
+        return problem
 
     async def list_builtin_problems(
         self,
@@ -71,11 +111,61 @@ class BuiltinProblemService:
     async def get_builtin_problem_by_id(
         self, problem_id: str
     ) -> BuiltinProblem:
-        """Raise BuiltinProblemNotFoundException if not found."""
+        """Raise BuiltinProblemNotFoundException if not found or inactive."""
         problem = await self._builtin_dao.get_by_id(problem_id)
         if not problem or not problem.is_active:
             raise BuiltinProblemNotFoundException(builtin_problem_id=problem_id)
         return problem
+
+    async def update(
+        self, problem_id: str, data: BuiltinProblemUpdateData
+    ) -> BuiltinProblem:
+        problem = await self._builtin_dao.get_by_id(problem_id)
+        if not problem:
+            raise BuiltinProblemNotFoundException(builtin_problem_id=problem_id)
+
+        update_fields: dict[str, Any] = {}
+        if data.title is not None and data.title != problem.title:
+            update_fields["title"] = data.title
+            update_fields["slug"] = await self._generate_unique_slug(data.title)
+
+        for field in (
+            "description",
+            "input_format",
+            "output_format",
+            "constraints",
+            "difficulty",
+            "points",
+            "base_price",
+            "time_limit_ms",
+            "memory_limit_mb",
+        ):
+            value = getattr(data, field)
+            if value is not None:
+                update_fields[field] = value
+
+        if data.sample_io is not None:
+            update_fields["sample_io"] = [
+                item.model_dump() for item in data.sample_io
+            ]
+
+        updated = await self._builtin_dao.update(problem, **update_fields)
+        logger.info(
+            f"Builtin problem updated: id={updated.id} fields={list(update_fields.keys())}"
+        )
+        return updated
+
+    async def delete(self, problem_id: str) -> None:
+        problem = await self._builtin_dao.get_by_id(problem_id)
+        if not problem:
+            raise BuiltinProblemNotFoundException(builtin_problem_id=problem_id)
+        await self._builtin_dao.delete(problem)
+        logger.info(f"Builtin problem deleted: id={problem_id}")
+
+    async def set_test_cases_url(
+        self, problem: BuiltinProblem, url: str
+    ) -> BuiltinProblem:
+        return await self._builtin_dao.set_test_cases_url(problem, url)
 
 
 class CustomProblemService:

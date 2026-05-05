@@ -197,3 +197,16 @@ class CustomProblemSlugConflictException(AppException):
             status_code=409,
             details=details,
         )
+
+
+class BuiltinProblemSlugConflictException(AppException):
+    """Raised when a globally-unique slug cannot be generated for a built-in problem. HTTP 409."""
+
+    def __init__(self, slug: Optional[str] = None):
+        details = {"slug": slug} if slug else None
+        super().__init__(
+            code="BUILTIN_PROBLEM_SLUG_CONFLICT",
+            message="Could not generate a unique slug for this problem. Try a different title.",
+            status_code=409,
+            details=details,
+        )

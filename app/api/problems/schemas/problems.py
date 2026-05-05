@@ -34,6 +34,10 @@ class BuiltinProblemResponseData(BaseSchema):
     title: str
     slug: str
     description: str
+    input_format: Optional[str] = None
+    output_format: Optional[str] = None
+    constraints: Optional[str] = None
+    sample_io: Optional[list[SampleIOItem]] = None
     difficulty: Difficulty
     points: int
     base_price: int
@@ -43,9 +47,10 @@ class BuiltinProblemResponseData(BaseSchema):
     created_by: Optional[str] = "system"
     is_active: bool
     created_at: datetime
+    updated_at: datetime
 
 
-# ── Custom problem schemas ────────────────────────────────────────────────────
+# ── Built-in problem write schemas ───────────────────────────────────────────
 
 
 def _validate_points(v: Optional[int]) -> Optional[int]:
@@ -70,6 +75,55 @@ def _validate_memory_limit(v: Optional[int]) -> Optional[int]:
     if v is not None and v < 16:
         raise ValueError("memory_limit_mb must be >= 16")
     return v
+
+
+class BuiltinProblemCreateData(BaseSchema):
+    title: str = Field(..., min_length=1, max_length=255)
+    description: str = Field(..., min_length=1)
+    input_format: Optional[str] = Field(default=None, min_length=1)
+    output_format: Optional[str] = Field(default=None, min_length=1)
+    constraints: Optional[str] = Field(default=None, min_length=1)
+    sample_io: list[SampleIOItem] = Field(default_factory=list)
+    difficulty: Difficulty
+    points: int
+    base_price: int
+    time_limit_ms: int = 2000
+    memory_limit_mb: int = 256
+
+    _v_points = field_validator("points")(_validate_points)
+    _v_base_price = field_validator("base_price")(_validate_base_price)
+    _v_time_limit = field_validator("time_limit_ms")(_validate_time_limit)
+    _v_memory = field_validator("memory_limit_mb")(_validate_memory_limit)
+
+
+class BuiltinProblemCreateRequest(BaseSchema):
+    data: BuiltinProblemCreateData
+
+
+class BuiltinProblemUpdateData(BaseSchema):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    description: Optional[str] = Field(default=None, min_length=1)
+    input_format: Optional[str] = Field(default=None, min_length=1)
+    output_format: Optional[str] = Field(default=None, min_length=1)
+    constraints: Optional[str] = Field(default=None, min_length=1)
+    sample_io: Optional[list[SampleIOItem]] = None
+    difficulty: Optional[Difficulty] = None
+    points: Optional[int] = None
+    base_price: Optional[int] = None
+    time_limit_ms: Optional[int] = None
+    memory_limit_mb: Optional[int] = None
+
+    _v_points = field_validator("points")(_validate_points)
+    _v_base_price = field_validator("base_price")(_validate_base_price)
+    _v_time_limit = field_validator("time_limit_ms")(_validate_time_limit)
+    _v_memory = field_validator("memory_limit_mb")(_validate_memory_limit)
+
+
+class BuiltinProblemUpdateRequest(BaseSchema):
+    data: BuiltinProblemUpdateData
+
+
+# ── Custom problem schemas ────────────────────────────────────────────────────
 
 
 class CustomProblemCreateData(BaseSchema):
@@ -226,3 +280,28 @@ CustomProblemResponse = APIResponse[CustomProblemResponseData]
 CustomProblemListResponse = APIResponse[list[CustomProblemResponseData]]
 ContestProblemResponse = APIResponse[ContestProblemResponseData]
 ContestProblemListResponse = APIResponse[list[ContestProblemResponseData]]
+
+__all__ = [
+    "SampleIOItem",
+    "BuiltinProblemResponseData",
+    "BuiltinProblemCreateData",
+    "BuiltinProblemCreateRequest",
+    "BuiltinProblemUpdateData",
+    "BuiltinProblemUpdateRequest",
+    "BuiltinProblemResponse",
+    "BuiltinProblemListResponse",
+    "CustomProblemCreateData",
+    "CustomProblemCreateRequest",
+    "CustomProblemUpdateData",
+    "CustomProblemUpdateRequest",
+    "CustomProblemResponseData",
+    "CustomProblemResponse",
+    "CustomProblemListResponse",
+    "ImportProblemData",
+    "ImportProblemRequest",
+    "ContestProblemUpdateData",
+    "ContestProblemUpdateRequest",
+    "ContestProblemResponseData",
+    "ContestProblemResponse",
+    "ContestProblemListResponse",
+]

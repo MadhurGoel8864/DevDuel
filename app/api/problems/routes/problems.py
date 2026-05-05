@@ -16,8 +16,11 @@ from app.api.problems.handlers.custom_problems import (
     update_custom_problem_handler,
 )
 from app.api.problems.handlers.problems import (
+    create_builtin_problem_handler,
+    delete_builtin_problem_handler,
     get_builtin_problem_handler,
     list_builtin_problems_handler,
+    update_builtin_problem_handler,
 )
 from app.api.problems.handlers.test_cases import (
     get_custom_test_cases_handler,
@@ -29,9 +32,25 @@ from app.api.problems.handlers.test_cases import (
 # ── /api/problems ─────────────────────────────────────────────────────────────
 problems_router = APIRouter(prefix="/problems", tags=["Problems"])
 
-# Built-in catalog
+# Built-in catalog (list + create)
 problems_router.add_api_route(
     "/builtin/problems", list_builtin_problems_handler, methods=["GET"]
+)
+problems_router.add_api_route(
+    "/builtin/problems",
+    create_builtin_problem_handler,
+    methods=["POST"],
+    status_code=201,
+)
+problems_router.add_api_route(
+    "/builtin/problems/{problem_id}",
+    update_builtin_problem_handler,
+    methods=["PUT"],
+)
+problems_router.add_api_route(
+    "/builtin/problems/{problem_id}",
+    delete_builtin_problem_handler,
+    methods=["DELETE"],
 )
 
 # Custom (admin-authored) problems CRUD — must be declared BEFORE the

@@ -43,6 +43,11 @@ class BuiltinProblem(Base):
     memory_limit_mb = mapped_column(Integer, default=256, nullable=False)
     is_active = mapped_column(Boolean, default=True, nullable=False)
 
+    input_format = mapped_column(Text, nullable=True)
+    output_format = mapped_column(Text, nullable=True)
+    constraints = mapped_column(Text, nullable=True)
+    sample_io = mapped_column(JSONB, nullable=True, server_default="[]")
+
     # GCS URL pointing to the JSON file containing test cases for this problem
     test_cases_url = mapped_column(String(1024), nullable=True)
 
