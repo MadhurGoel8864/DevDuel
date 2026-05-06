@@ -13,17 +13,6 @@ class BaseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
-# ── Shared shapes ──────────────────────────────────────────────────────────────
-
-
-class SampleIOItem(BaseSchema):
-    """One sample input/output pair for a custom problem."""
-
-    input: str
-    output: str
-    explanation: Optional[str] = None
-
-
 # ── Built-in problem responses (unchanged surface) ────────────────────────────
 
 
@@ -37,7 +26,6 @@ class BuiltinProblemResponseData(BaseSchema):
     input_format: Optional[str] = None
     output_format: Optional[str] = None
     constraints: Optional[str] = None
-    sample_io: Optional[list[SampleIOItem]] = None
     difficulty: Difficulty
     points: int
     base_price: int
@@ -83,7 +71,6 @@ class BuiltinProblemCreateData(BaseSchema):
     input_format: Optional[str] = Field(default=None, min_length=1)
     output_format: Optional[str] = Field(default=None, min_length=1)
     constraints: Optional[str] = Field(default=None, min_length=1)
-    sample_io: list[SampleIOItem] = Field(default_factory=list)
     difficulty: Difficulty
     points: int
     base_price: int
@@ -106,7 +93,6 @@ class BuiltinProblemUpdateData(BaseSchema):
     input_format: Optional[str] = Field(default=None, min_length=1)
     output_format: Optional[str] = Field(default=None, min_length=1)
     constraints: Optional[str] = Field(default=None, min_length=1)
-    sample_io: Optional[list[SampleIOItem]] = None
     difficulty: Optional[Difficulty] = None
     points: Optional[int] = None
     base_price: Optional[int] = None
@@ -132,7 +118,6 @@ class CustomProblemCreateData(BaseSchema):
     input_format: str = Field(..., min_length=1)
     output_format: str = Field(..., min_length=1)
     constraints: str = Field(..., min_length=1)
-    sample_io: list[SampleIOItem] = Field(default_factory=list)
     difficulty: Difficulty
     points: int
     base_price: int
@@ -155,7 +140,6 @@ class CustomProblemUpdateData(BaseSchema):
     input_format: Optional[str] = Field(default=None, min_length=1)
     output_format: Optional[str] = Field(default=None, min_length=1)
     constraints: Optional[str] = Field(default=None, min_length=1)
-    sample_io: Optional[list[SampleIOItem]] = None
     difficulty: Optional[Difficulty] = None
     points: Optional[int] = None
     base_price: Optional[int] = None
@@ -183,7 +167,6 @@ class CustomProblemResponseData(BaseSchema):
     input_format: str
     output_format: str
     constraints: str
-    sample_io: list[SampleIOItem]
     difficulty: Difficulty
     points: int
     base_price: int

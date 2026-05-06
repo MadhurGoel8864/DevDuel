@@ -12,7 +12,6 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import mapped_column, relationship
 
 from app.core.enums import Difficulty, ProblemKind
@@ -46,7 +45,6 @@ class BuiltinProblem(Base):
     input_format = mapped_column(Text, nullable=True)
     output_format = mapped_column(Text, nullable=True)
     constraints = mapped_column(Text, nullable=True)
-    sample_io = mapped_column(JSONB, nullable=True, server_default="[]")
 
     # GCS URL pointing to the JSON file containing test cases for this problem
     test_cases_url = mapped_column(String(1024), nullable=True)
@@ -102,7 +100,6 @@ class CustomProblem(Base):
     input_format = mapped_column(Text, nullable=False)
     output_format = mapped_column(Text, nullable=False)
     constraints = mapped_column(Text, nullable=False)
-    sample_io = mapped_column(JSONB, nullable=False, server_default="[]")
 
     difficulty = mapped_column(
         Enum(

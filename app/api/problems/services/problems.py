@@ -70,7 +70,6 @@ class BuiltinProblemService:
 
     async def create(self, data: BuiltinProblemCreateData) -> BuiltinProblem:
         slug = await self._generate_unique_slug(data.title)
-        sample_io = [item.model_dump() for item in data.sample_io]
         problem = await self._builtin_dao.create(
             title=data.title,
             slug=slug,
@@ -78,7 +77,6 @@ class BuiltinProblemService:
             input_format=data.input_format,
             output_format=data.output_format,
             constraints=data.constraints,
-            sample_io=sample_io,
             difficulty=data.difficulty,
             points=data.points,
             base_price=data.base_price,
@@ -144,11 +142,6 @@ class BuiltinProblemService:
             if value is not None:
                 update_fields[field] = value
 
-        if data.sample_io is not None:
-            update_fields["sample_io"] = [
-                item.model_dump() for item in data.sample_io
-            ]
-
         updated = await self._builtin_dao.update(problem, **update_fields)
         logger.info(
             f"Builtin problem updated: id={updated.id} fields={list(update_fields.keys())}"
@@ -196,7 +189,6 @@ class CustomProblemService:
         self, user_id: str, data: CustomProblemCreateData
     ) -> CustomProblem:
         slug = await self._generate_unique_slug(user_id, data.title)
-        sample_io = [item.model_dump() for item in data.sample_io]
         problem = await self._dao.create(
             created_by=user_id,
             title=data.title,
@@ -205,7 +197,6 @@ class CustomProblemService:
             input_format=data.input_format,
             output_format=data.output_format,
             constraints=data.constraints,
-            sample_io=sample_io,
             difficulty=data.difficulty,
             points=data.points,
             base_price=data.base_price,
@@ -262,11 +253,6 @@ class CustomProblemService:
             value = getattr(data, field)
             if value is not None:
                 update_fields[field] = value
-
-        if data.sample_io is not None:
-            update_fields["sample_io"] = [
-                item.model_dump() for item in data.sample_io
-            ]
 
         updated = await self._dao.update(problem, **update_fields)
         logger.info(

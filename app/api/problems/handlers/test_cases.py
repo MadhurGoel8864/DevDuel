@@ -5,7 +5,7 @@ import logging
 from fastapi import Body, Depends, Path
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from app.api.auth.dependencies import require_organizer
+from app.api.auth.dependencies import require_admin, require_organizer
 from app.api.auth.schemas import UserWithPermissions
 from app.api.problems.dao.problems import (
     BuiltinProblemDAO,
@@ -88,10 +88,10 @@ GetTestCasesResponse = APIResponse[GetTestCasesResponseData]
 async def upload_test_cases_handler(
     problem_id: str = Path(..., description="Builtin Problem ID"),
     request: UploadTestCasesRequest = Body(...),
-    current_user: UserWithPermissions = Depends(require_organizer),
+    current_user: UserWithPermissions = Depends(require_admin),
     dao: BuiltinProblemDAO = Depends(get_builtin_problem_dao),
 ) -> UploadTestCasesResponse:
-    """Upload test cases for a builtin problem. Replaces any existing test cases in GCS."""
+    """Upload test cases for a builtin problem. Replaces any existing test cases in GCS. Requires admin role."""
     logger.info(
         f"[test_cases] Upload request: problem_id={problem_id}, "
         f"user={current_user.user_id}, count={len(request.data.test_cases)}"
@@ -207,7 +207,7 @@ async def get_test_cases_handler(
     current_user: UserWithPermissions = Depends(require_organizer),
     dao: BuiltinProblemDAO = Depends(get_builtin_problem_dao),
 ) -> GetTestCasesResponse:
-    """Fetch all test cases for a builtin problem from GCS."""
+    """Fetch all test cases for a builtin problem from GCS. Requires organizer role."""
     problem = await dao.get_by_id(problem_id)
     if not problem or not problem.is_active:
         raise BuiltinProblemNotFoundException(builtin_problem_id=problem_id)

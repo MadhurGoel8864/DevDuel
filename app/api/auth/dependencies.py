@@ -136,7 +136,7 @@ async def get_current_user(
             user_id=user.id,
             email=user.email,
             username=user.username,
-            role=UserRole.USER,
+            role=UserRole.ADMIN if user.role == "admin" else UserRole.USER,
             permissions=[],
             is_active=user.is_active,
             is_verified=user.is_verified,
@@ -176,6 +176,22 @@ async def require_organizer(
     if not current_user.is_organizer:
         raise ForbiddenException(
             message="Only organizers are allowed to perform this action"
+        )
+    return current_user
+
+
+async def require_admin(
+    current_user: UserWithPermissions = Depends(get_current_user),
+) -> UserWithPermissions:
+    """
+    Dependency that ensures the authenticated user is a platform admin.
+
+    Raises:
+        ForbiddenException: If the user does not have role=admin.
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise ForbiddenException(
+            message="Only platform admins are allowed to perform this action"
         )
     return current_user
 
