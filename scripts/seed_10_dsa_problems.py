@@ -88,23 +88,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `-10^9 ≤ nums[i], target ≤ 10^9`\n"
             "- All elements are distinct and sorted in ascending order."
         ),
-        "sample_io": [
-            {
-                "input": "5 3\n1 2 3 4 5",
-                "output": "2",
-                "explanation": "`nums[2] = 3`. Answer is `2`.",
-            },
-            {
-                "input": "5 6\n1 2 3 4 5",
-                "output": "-1",
-                "explanation": "`6` is not in the array.",
-            },
-            {
-                "input": "1 7\n7",
-                "output": "0",
-                "explanation": "Single-element array; `nums[0] = 7`.",
-            },
-        ],
         "test_cases": [
             # samples
             _tc("5 3\n1 2 3 4 5",              "2",  is_sample=True),
@@ -148,23 +131,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `1 ≤ |s| ≤ 10^4`\n"
             "- `s` consists only of `()[]{}` characters."
         ),
-        "sample_io": [
-            {
-                "input": "()",
-                "output": "YES",
-                "explanation": "Single matched pair.",
-            },
-            {
-                "input": "()[]{}",
-                "output": "YES",
-                "explanation": "Three separate matched pairs.",
-            },
-            {
-                "input": "(]",
-                "output": "NO",
-                "explanation": "`(` is not closed by `]`.",
-            },
-        ],
         "test_cases": [
             # samples
             _tc("()",        "YES", is_sample=True),
@@ -208,23 +174,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `1 ≤ n ≤ 10^5`\n"
             "- `-10^6 ≤ nums[i] ≤ 10^6`"
         ),
-        "sample_io": [
-            {
-                "input": "9\n-2 1 -3 4 -1 2 1 -5 4",
-                "output": "6",
-                "explanation": "The subarray `[4, -1, 2, 1]` has the largest sum `6`.",
-            },
-            {
-                "input": "1\n1",
-                "output": "1",
-                "explanation": "Only one element.",
-            },
-            {
-                "input": "5\n5 4 -1 7 8",
-                "output": "23",
-                "explanation": "The entire array sums to `23`.",
-            },
-        ],
         "test_cases": [
             # samples
             _tc("9\n-2 1 -3 4 -1 2 1 -5 4",        "6",       is_sample=True),
@@ -262,23 +211,6 @@ PROBLEMS: list[dict[str, Any]] = [
         "input_format": "- A single integer `n`.",
         "output_format": "Print a single integer — the number of distinct ways to climb `n` stairs.",
         "constraints": "- `1 ≤ n ≤ 45`",
-        "sample_io": [
-            {
-                "input": "1",
-                "output": "1",
-                "explanation": "Only one way: `1` step.",
-            },
-            {
-                "input": "2",
-                "output": "2",
-                "explanation": "Two ways: `(1,1)` or `(2)`.",
-            },
-            {
-                "input": "5",
-                "output": "8",
-                "explanation": "8 distinct ways to reach step 5.",
-            },
-        ],
         "test_cases": [
             # samples
             _tc("1",  "1",          is_sample=True),
@@ -326,23 +258,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `1 ≤ n ≤ 10^4`\n"
             "- `0 ≤ l ≤ r ≤ 10^9`"
         ),
-        "sample_io": [
-            {
-                "input": "4\n1 3\n2 6\n8 10\n15 18",
-                "output": "1 6\n8 10\n15 18",
-                "explanation": "`[1,3]` and `[2,6]` overlap → merge to `[1,6]`. Others don't overlap.",
-            },
-            {
-                "input": "2\n1 4\n4 5",
-                "output": "1 5",
-                "explanation": "`[1,4]` and `[4,5]` share endpoint 4 → merge to `[1,5]`.",
-            },
-            {
-                "input": "3\n1 5\n2 3\n4 6",
-                "output": "1 6",
-                "explanation": "All three intervals overlap, merging into `[1,6]`.",
-            },
-        ],
         "test_cases": [
             # samples
             _tc("4\n1 3\n2 6\n8 10\n15 18",          "1 6\n8 10\n15 18", is_sample=True),
@@ -391,23 +306,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `1 ≤ coins[i] ≤ 1000`\n"
             "- `0 ≤ amount ≤ 10^4`"
         ),
-        "sample_io": [
-            {
-                "input": "3 11\n1 5 6",
-                "output": "2",
-                "explanation": "`5 + 6 = 11` using 2 coins.",
-            },
-            {
-                "input": "2 3\n2 3",
-                "output": "1",
-                "explanation": "Use one coin of denomination `3`.",
-            },
-            {
-                "input": "1 3\n2",
-                "output": "-1",
-                "explanation": "`3` cannot be formed from multiples of `2`.",
-            },
-        ],
         "test_cases": [
             # samples
             _tc("3 11\n1 5 6",        "2",  is_sample=True),  # 5+6
@@ -454,23 +352,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `1 ≤ |text1|, |text2| ≤ 1000`\n"
             "- Both strings consist of only lowercase and uppercase English letters."
         ),
-        "sample_io": [
-            {
-                "input": "ABCBDAB\nBDCABA",
-                "output": "4",
-                "explanation": "LCS is `BDAB` or `BCBA`, length `4`.",
-            },
-            {
-                "input": "AGGTAB\nGXTXAYB",
-                "output": "4",
-                "explanation": "LCS is `GTAB`, length `4`.",
-            },
-            {
-                "input": "ABC\nAC",
-                "output": "2",
-                "explanation": "LCS is `AC`, length `2`.",
-            },
-        ],
         "test_cases": [
             # samples
             _tc("ABCBDAB\nBDCABA",     "4", is_sample=True),
@@ -517,23 +398,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `1 ≤ weight_i ≤ 100`\n"
             "- `1 ≤ value_i ≤ 1000`"
         ),
-        "sample_io": [
-            {
-                "input": "4 7\n1 1\n3 4\n4 5\n5 7",
-                "output": "9",
-                "explanation": "Take items 2 and 3 (w=3+4=7, v=4+5=9).",
-            },
-            {
-                "input": "3 50\n10 60\n20 100\n30 120",
-                "output": "220",
-                "explanation": "Take items 2 and 3 (w=20+30=50, v=100+120=220).",
-            },
-            {
-                "input": "1 10\n10 100",
-                "output": "100",
-                "explanation": "Single item fits exactly.",
-            },
-        ],
         "test_cases": [
             # samples
             _tc("4 7\n1 1\n3 4\n4 5\n5 7",             "9",   is_sample=True),
@@ -576,23 +440,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `1 ≤ m, n ≤ 15`\n"
             "- The answer is guaranteed to fit in a 32-bit signed integer."
         ),
-        "sample_io": [
-            {
-                "input": "3 7",
-                "output": "28",
-                "explanation": "C(8, 2) = 28 unique paths in a 3×7 grid.",
-            },
-            {
-                "input": "3 2",
-                "output": "3",
-                "explanation": "Three paths: RD+D, D+RD, D+D+R (in terms of moves).",
-            },
-            {
-                "input": "1 1",
-                "output": "1",
-                "explanation": "Already at the destination — 1 trivial path.",
-            },
-        ],
         "test_cases": [
             # samples — answers = C(m+n-2, m-1)
             _tc("3 7",   "28",    is_sample=True),   # C(8,2)=28
@@ -637,23 +484,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `1 ≤ n ≤ 2500`\n"
             "- `-10^4 ≤ nums[i] ≤ 10^4`"
         ),
-        "sample_io": [
-            {
-                "input": "8\n10 9 2 5 3 7 101 18",
-                "output": "4",
-                "explanation": "The LIS is `[2, 3, 7, 101]`, length `4`.",
-            },
-            {
-                "input": "4\n0 1 0 3",
-                "output": "3",
-                "explanation": "The LIS is `[0, 1, 3]`, length `3`.",
-            },
-            {
-                "input": "6\n7 7 7 7 7 7",
-                "output": "1",
-                "explanation": "All elements equal → LIS length is `1`.",
-            },
-        ],
         "test_cases": [
             # samples
             _tc("8\n10 9 2 5 3 7 101 18",         "4", is_sample=True),
@@ -700,7 +530,6 @@ async def seed(session: AsyncSession) -> None:
                 input_format=prob["input_format"],
                 output_format=prob["output_format"],
                 constraints=prob["constraints"],
-                sample_io=prob["sample_io"],
                 difficulty=prob["difficulty"],
                 points=prob["points"],
                 base_price=prob["base_price"],

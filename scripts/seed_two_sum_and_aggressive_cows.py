@@ -77,23 +77,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `-10^9 ≤ target ≤ 10^9`\n"
             "- Exactly one valid answer exists."
         ),
-        "sample_io": [
-            {
-                "input": "4 9\n2 7 11 15",
-                "output": "0 1",
-                "explanation": "`nums[0] + nums[1] = 2 + 7 = 9`. Answer is `0 1`.",
-            },
-            {
-                "input": "3 6\n3 2 4",
-                "output": "1 2",
-                "explanation": "`nums[1] + nums[2] = 2 + 4 = 6`. Answer is `1 2`.",
-            },
-            {
-                "input": "2 6\n3 3",
-                "output": "0 1",
-                "explanation": "`nums[0] + nums[1] = 3 + 3 = 6`. Answer is `0 1`.",
-            },
-        ],
         # Test case answers verified manually.
         # nums indices are 0-based; output is always "i j" with i < j.
         "test_cases": [
@@ -144,25 +127,6 @@ PROBLEMS: list[dict[str, Any]] = [
             "- `0 ≤ stall position ≤ 10^9`\n"
             "- All stall positions are distinct."
         ),
-        "sample_io": [
-            {
-                "input": "5 3\n1 2 8 4 9",
-                "output": "3",
-                "explanation": (
-                    "Sort stalls: `[1, 2, 4, 8, 9]`. "
-                    "Place cows at positions `1`, `4`, and `9`. "
-                    "Gaps: 3 and 5 — minimum is `3`."
-                ),
-            },
-            {
-                "input": "3 2\n0 10 5",
-                "output": "10",
-                "explanation": (
-                    "Sort stalls: `[0, 5, 10]`. "
-                    "Place cows at positions `0` and `10`. Distance = `10`."
-                ),
-            },
-        ],
         # Answers verified by binary-search simulation on sorted stall arrays.
         "test_cases": [
             # samples
@@ -210,7 +174,6 @@ async def seed(session: AsyncSession) -> None:
                 input_format=prob["input_format"],
                 output_format=prob["output_format"],
                 constraints=prob["constraints"],
-                sample_io=prob["sample_io"],
                 difficulty=prob["difficulty"],
                 points=prob["points"],
                 base_price=prob["base_price"],
