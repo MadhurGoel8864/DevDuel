@@ -7,7 +7,8 @@ These handlers implement the authentication endpoints.
 import logging
 import random
 
-from fastapi import BackgroundTasks, Depends
+from arq.connections import ArqRedis
+from fastapi import Depends
 
 from app.api.auth.dependencies import (
     get_current_user,
@@ -41,13 +42,9 @@ from app.api.teams.services.team_invites import (
 )
 from app.api.users.schemas.users import UserCreateData
 from app.api.users.services.users import UserService, get_user_service
+from app.core.arq_pool import get_arq_pool_dep
 from app.core.config import settings
 from app.core.enums import PlatformType
-from app.services.email import email_service
-from app.services.email.templates import (
-    otp_email_template,
-    password_reset_email_template,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -164,9 +161,9 @@ async def refresh_token_handler(
 
 async def register_handler(
     request: RegisterRequest,
-    background_tasks: BackgroundTasks,
     user_service: UserService = Depends(get_user_service),
     invite_service: TeamInviteService = Depends(get_team_invite_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
 ) -> RegisterResponse:
     """
     Register a new user.
@@ -174,35 +171,29 @@ async def register_handler(
     If invite_token is present:
       1. Token is validated upfront — if invalid/expired, entire request is rejected
          so no orphaned user account is created.
-      2. User is created normally and OTP is sent.
+      2. User is created normally and OTP is enqueued via ARQ.
       3. invite_token is stored in Redis as pending_team_join:{user_id}
       4. When user verifies OTP → they are automatically added to the team.
     """
-    # Validate invite token upfront before creating the user
-    # so we don't create orphaned accounts for invalid invites
     if request.invite_token:
         await invite_service.validate_token(request.invite_token)
 
-    # Create user (sends OTP email internally via background task)
     user_data = UserCreateData(
         email=request.email,
         password=request.password,
         full_name=request.full_name,
     )
-    new_user = await user_service.create_user(
-        user_data=user_data,
-        background_tasks=background_tasks,
-    )
+    new_user, otp = await user_service.create_user(user_data=user_data)
 
-    # Store pending team join — consumed automatically when OTP is verified
+    await arq_pool.enqueue_job("send_otp_email_task", email=new_user.email, otp=otp)
+    logger.info(f"OTP email enqueued for {new_user.email}")
+
     if request.invite_token:
         await invite_service.store_pending_join(
             user_id=new_user.id,
             invite_token=request.invite_token,
         )
-        logger.info(
-            f"Pending team join stored for new user {new_user.id} via invite token"
-        )
+        logger.info(f"Pending team join stored for new user {new_user.id} via invite token")
 
     return RegisterResponse(
         message=(
@@ -261,60 +252,13 @@ async def verify_otp_handler(
     )
 
 
-def send_otp_email_task(email: str, otp: str) -> None:
-    """
-    Background task to send OTP email.
-
-    This runs asynchronously without blocking the HTTP response.
-
-    Args:
-        email: Recipient email address
-        otp: The OTP code to send
-    """
-    try:
-        subject, html_body = otp_email_template(otp)
-        email_service.send_email(
-            to_email=email,
-            subject=subject,
-            body=html_body,
-            html=True,
-        )
-    except Exception as e:
-        # Log error but don't crash the background task
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.error(f"Failed to send OTP email to {email}: {e}")
-
-
 async def send_otp_handler(
     request: SendOTPRequest,
-    background_tasks: BackgroundTasks,
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
 ) -> SendOTPResponse:
-    """
-    Send OTP to user's email (example implementation).
-
-    This is a demonstration of how to integrate the email service.
-    In production, you should:
-    1. Generate OTP using a secure random generator
-    2. Store OTP in Redis with 5-minute TTL
-    3. Associate OTP with user email
-    4. Send email via background task (as shown here)
-
-    Args:
-        request: Email address to send OTP to
-        background_tasks: FastAPI background tasks for async email sending
-
-    Returns:
-        SendOTPResponse: Confirmation message
-    """
-    # Generate 6-digit OTP (placeholder - use secure random in production)
+    """Send OTP to user's email (example/test endpoint)."""
     otp = str(random.randint(100000, 999999))
-
-    # Add email sending to background tasks (non-blocking)
-    background_tasks.add_task(send_otp_email_task, request.email, otp)
-
-    # Return immediately without waiting for email to send
+    await arq_pool.enqueue_job("send_otp_email_task", email=request.email, otp=otp)
     return SendOTPResponse(
         message="OTP sent successfully. Please check your email.",
         email=request.email,
@@ -323,31 +267,14 @@ async def send_otp_handler(
 
 async def resend_otp_handler(
     request: SendOTPRequest,
-    background_tasks: BackgroundTasks,
     user_service: UserService = Depends(get_user_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
 ) -> SendOTPResponse:
-    """
-    Resend OTP to user's email.
+    """Resend OTP to user's email."""
+    otp_sent, otp = await user_service.resend_otp(request.email)
 
-    This endpoint delegates to the service layer to validate user existence,
-    generate a new OTP, store it in Redis, and send it via email.
-
-    Args:
-        request: Email address to resend OTP to
-        background_tasks: FastAPI background tasks for async email sending
-        user_service: User service for OTP operations
-
-    Returns:
-        SendOTPResponse: Confirmation message
-
-    Raises:
-        UnauthorizedException: If user with email does not exist
-    """
-    # Service layer handles all business logic and returns whether OTP was sent
-    otp_sent = await user_service.resend_otp(request.email, background_tasks)
-
-    # Return appropriate response based on whether OTP was sent
     if otp_sent:
+        await arq_pool.enqueue_job("send_otp_email_task", email=request.email, otp=otp)
         return SendOTPResponse(
             message="OTP resent successfully. Please check your email.",
             email=request.email,
@@ -359,62 +286,19 @@ async def resend_otp_handler(
         )
 
 
-def send_password_reset_email_task(email: str, reset_link: str) -> None:
-    """
-    Background task to send password reset email.
-
-    This runs asynchronously without blocking the HTTP response.
-
-    Args:
-        email: Recipient email address
-        reset_link: Full frontend URL with reset token as query param
-    """
-    try:
-        subject, html_body = password_reset_email_template(reset_link)
-        email_service.send_email(
-            to_email=email,
-            subject=subject,
-            body=html_body,
-            html=True,
-        )
-    except Exception as e:
-        logger.error(f"Failed to send password reset email to {email}: {e}")
-
-
 async def forgot_password_handler(
     request: ForgotPasswordRequest,
-    background_tasks: BackgroundTasks,
     auth_service: AuthService = Depends(get_auth_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
 ) -> ForgotPasswordResponse:
-    """
-    Initiate password reset process.
-
-    Validates user, generates reset token, stores in Redis, and sends email
-    with a clickable reset link pointing to the frontend.
-
-    Args:
-        request: Email address for password reset
-        background_tasks: FastAPI background tasks for async email sending
-        auth_service: Auth service for password reset operations
-
-    Returns:
-        ForgotPasswordResponse: Confirmation message
-
-    Raises:
-        UnauthorizedException: If user not found
-        ForbiddenException: If user account is inactive or OAuth-based
-    """
-    # Delegate to service layer
+    """Initiate password reset — generate token, enqueue reset email."""
     result = await auth_service.request_password_reset(request.email)
-
-    # Build the full reset link that the frontend will handle
     reset_link = f"{settings.FRONTEND_RESET_PASSWORD_URL}?token={result.reset_token}"
 
-    # Add email sending to background tasks (non-blocking)
-    background_tasks.add_task(
-        send_password_reset_email_task,
-        result.email,
-        reset_link,
+    await arq_pool.enqueue_job(
+        "send_password_reset_task",
+        email=result.email,
+        reset_link=reset_link,
     )
 
     return ForgotPasswordResponse(

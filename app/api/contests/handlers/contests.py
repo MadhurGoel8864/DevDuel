@@ -2,12 +2,12 @@
 
 import logging
 
-from fastapi import BackgroundTasks, Body, Depends, Path, Query
-
-from app.api.common.dependencies import PaginationParams, get_pagination
+from arq.connections import ArqRedis
+from fastapi import Body, Depends, Path, Query
 
 from app.api.auth.dependencies import get_current_user, require_organizer
 from app.api.auth.schemas import UserWithPermissions
+from app.api.common.dependencies import PaginationParams, get_pagination
 from app.api.contests.schemas.contests import (
     ContestCreateRequest,
     ContestEditRequest,
@@ -30,34 +30,11 @@ from app.api.contests.schemas.contests import (
     UserRegistrationCheckResponse,
 )
 from app.api.contests.services.contests import ContestService, get_contest_service
+from app.core.arq_pool import get_arq_pool_dep
 from app.core.enums import ContestStatus
 from app.core.responses import MetaResponse
-from app.services.email import email_service
-from app.services.email.templates.contest_update import contest_update_template
 
 logger = logging.getLogger(__name__)
-
-
-def _send_contest_update_email(
-    email: str,
-    contest_name: str,
-    diff: dict,
-) -> None:
-    """Background task — send contest update notification to a single user."""
-    try:
-        subject, html_body = contest_update_template(
-            contest_name=contest_name,
-            diff=diff,
-        )
-        email_service.send_email(
-            to_email=email,
-            subject=subject,
-            body=html_body,
-            html=True,
-        )
-        logger.info(f"Contest update email sent to {email}")
-    except Exception as e:
-        logger.error(f"Failed to send contest update email to {email}: {e}")
 
 
 async def create_contest_handler(
@@ -82,9 +59,9 @@ async def create_contest_handler(
 async def edit_contest_handler(
     contest_id: str = Path(..., description="Contest ID"),
     request: ContestEditRequest = Body(...),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
 ) -> ContestResponse:
     """
     Partially update a contest (organizer/creator only).
@@ -93,7 +70,7 @@ async def edit_contest_handler(
     All fields optional — only provided fields are updated.
 
     If any fields actually changed AND there are registered teams,
-    an update email is sent to all team members as a background task.
+    an update email is enqueued via ARQ for each member.
     """
     updated_contest, diff = await contest_service.edit_contest(
         contest_id=contest_id,
@@ -107,19 +84,18 @@ async def edit_contest_handler(
         clear_email_domain=request.data.allowed_email_domain == "",
     )
 
-    # Only send emails if something actually changed
     if diff:
         emails = await contest_service.get_contest_member_emails(contest_id)
         for email in emails:
-            background_tasks.add_task(
-                _send_contest_update_email,
+            await arq_pool.enqueue_job(
+                "send_contest_update_task",
                 email=email,
                 contest_name=updated_contest.name,
                 diff=diff,
             )
         if emails:
             logger.info(
-                f"Contest update emails queued for {len(emails)} member(s) "
+                f"Contest update emails enqueued for {len(emails)} member(s) "
                 f"— contest {contest_id}"
             )
 

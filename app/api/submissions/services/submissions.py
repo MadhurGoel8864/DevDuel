@@ -1,5 +1,6 @@
 """Submissions Service Layer — core judging pipeline."""
 
+import asyncio
 import base64
 import logging
 from datetime import datetime
@@ -24,6 +25,7 @@ from app.services.judge0.client import Judge0Client, Judge0Error, Judge0TimeoutE
 from app.services.judge0.constants import JUDGE0_TO_VERDICT, SUPPORTED_LANGUAGES
 from app.services.judge0.schemas import Judge0SubmissionRequest
 from app.services.storage import storage_service
+from app.services.storage.cache import get_cached_test_cases, set_cached_test_cases
 from app.services.storage.gcs import StorageError
 
 logger = logging.getLogger(__name__)
@@ -147,10 +149,11 @@ class SubmissionService:
         user_id: str,
         language: str,
         source_code: str,
-    ) -> Submission:
-        """Full judging pipeline: validate → submit to Judge0 → poll → score.
+    ) -> tuple["Submission", list[dict], int]:
+        """Phase 1 of the judging pipeline: validate → fetch test cases → submit to Judge0.
 
-        Returns the completed Submission with verdict and test results.
+        Returns (submission, test_cases, points). The submission has verdict=PENDING.
+        Polling and result processing happen in the ARQ background task.
         """
         logger.info(
             f"[submit] Starting: contest={contest_id}, problem={contest_problem_id}, "
@@ -211,22 +214,27 @@ class SubmissionService:
             )
             raise NoTestCasesException()
 
-        logger.debug(
-            f"[submit] Fetching test cases from: {underlying_problem.test_cases_url}"
-        )
-        try:
-            test_cases = storage_service.download_test_cases_from_url(
-                underlying_problem.test_cases_url
-            )
-        except StorageError as e:
-            logger.error(f"[submit] GCS download failed: {e}")
-            raise NoTestCasesException()
+        gcs_url = underlying_problem.test_cases_url
+        logger.debug(f"[submit] Fetching test cases from: {gcs_url}")
+
+        test_cases = await get_cached_test_cases(gcs_url)
+        if test_cases is None:
+            try:
+                test_cases = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: storage_service.download_test_cases_from_url(gcs_url),
+                )
+            except StorageError as e:
+                logger.error(f"[submit] GCS download failed: {e}")
+                raise NoTestCasesException()
+            await set_cached_test_cases(gcs_url, test_cases)
+            logger.info(f"[submit] GCS cache miss — downloaded and cached {len(test_cases)} test cases")
+        else:
+            logger.info(f"[submit] GCS cache hit — {len(test_cases)} test cases")
 
         if not test_cases:
-            logger.warning(f"[submit] Empty test cases file for problem {contest_problem_id}")
+            logger.warning(f"[submit] Empty test cases for problem {contest_problem_id}")
             raise NoTestCasesException()
-
-        logger.info(f"[submit] Fetched {len(test_cases)} test cases from GCS")
 
         # ── 6. Create Submission record (PENDING) ─────────────────────────────
         logger.debug(
@@ -311,18 +319,44 @@ class SubmissionService:
         await self._dao.update_submission(submission)
         logger.info(f"[submit] Judge0 tokens saved: submission={submission.id}, tokens={len(tokens)}")
 
+        # Phase 1 complete — polling and result processing happen in the ARQ task.
+        return submission, test_cases, contest_problem.points
+
+    async def process_judging_result(
+        self,
+        submission_id: str,
+        test_cases: list[dict],
+        points: int,
+    ) -> Submission:
+        """Phase 2: poll Judge0, process results, update DB, broadcast leaderboard.
+
+        Called by the ARQ background task after submit_code() completes Phase 1.
+        """
+        submission = await self._dao.get_submission_by_id(submission_id)
+        if not submission:
+            raise SubmissionNotFoundException(submission_id)
+
+        tokens = submission.judge0_tokens.split(",") if submission.judge0_tokens else []
+        if not tokens:
+            logger.error(f"[judge] No tokens found for submission {submission_id}")
+            submission.verdict = SubmissionVerdict.INTERNAL_ERROR
+            submission.error_message = "No Judge0 tokens available"
+            submission.judged_at = datetime.now()
+            await self._dao.update_submission(submission)
+            return submission
+
         # ── 9. Poll until all done ────────────────────────────────────────────
         try:
             results = await self._judge0.poll_batch_until_done(tokens)
         except Judge0TimeoutError as e:
-            logger.error(f"[submit] Polling timed out for submission {submission.id}: {e}")
+            logger.error(f"[judge] Polling timed out for submission {submission_id}: {e}")
             submission.verdict = SubmissionVerdict.INTERNAL_ERROR
             submission.error_message = "Execution timed out waiting for results"
             submission.judged_at = datetime.now()
             await self._dao.update_submission(submission)
             raise JudgeServiceException("Execution timed out")
         except Judge0Error as e:
-            logger.error(f"[submit] Polling failed for submission {submission.id}: {e}")
+            logger.error(f"[judge] Polling failed for submission {submission_id}: {e}")
             submission.verdict = SubmissionVerdict.INTERNAL_ERROR
             submission.error_message = str(e)
             submission.judged_at = datetime.now()
@@ -330,7 +364,7 @@ class SubmissionService:
             raise JudgeServiceException(str(e))
 
         # ── 10. Process results ───────────────────────────────────────────────
-        logger.info(f"[submit] Processing {len(results)} Judge0 results for submission {submission.id}")
+        logger.info(f"[judge] Processing {len(results)} Judge0 results for submission {submission_id}")
         passed = 0
         max_time_ms = 0
         max_memory_kb = 0
@@ -339,11 +373,8 @@ class SubmissionService:
         test_result_records = []
 
         for idx, (tc, result) in enumerate(zip(test_cases, results)):
-            verdict_str = JUDGE0_TO_VERDICT.get(
-                result.status.id, "INTERNAL_ERROR"
-            )
+            verdict_str = JUDGE0_TO_VERDICT.get(result.status.id, "INTERNAL_ERROR")
 
-            # Decode base64 outputs
             stdout_decoded = _b64_decode(result.stdout)
             stderr_decoded = _b64_decode(result.stderr)
             compile_decoded = _b64_decode(result.compile_output)
@@ -359,7 +390,6 @@ class SubmissionService:
             if result.status.id == 3:  # ACCEPTED
                 passed += 1
             elif overall_verdict == SubmissionVerdict.ACCEPTED:
-                # First failure sets the overall verdict
                 overall_verdict = SubmissionVerdict(verdict_str)
                 first_error_output = {
                     "stderr": stderr_decoded,
@@ -368,7 +398,7 @@ class SubmissionService:
                 }
 
             logger.debug(
-                f"[submit] TC#{idx}: verdict={verdict_str}, "
+                f"[judge] TC#{idx}: verdict={verdict_str}, "
                 f"time={time_ms}ms, memory={memory_kb}KB, "
                 f"status_id={result.status.id}"
             )
@@ -394,9 +424,8 @@ class SubmissionService:
 
         # ── 11. Save test results ─────────────────────────────────────────────
         await self._dao.create_test_results(test_result_records)
-        logger.debug(f"[submit] Saved {len(test_result_records)} test result records to DB")
+        logger.debug(f"[judge] Saved {len(test_result_records)} test result records to DB")
 
-        # Attach in-memory so the handler can return them without an extra DB round-trip
         submission.test_results = test_result_records
 
         # ── 12. Update submission with final verdict ──────────────────────────
@@ -416,21 +445,21 @@ class SubmissionService:
         # ── 13. If ACCEPTED → update assignment + score ───────────────────────
         if overall_verdict == SubmissionVerdict.ACCEPTED:
             await self._dao.mark_assignment_solved_and_add_score(
-                assignment_id=assignment.id,
-                team_id=team_id,
-                contest_id=contest_id,
-                points=contest_problem.points,
+                assignment_id=submission.assignment_id,
+                team_id=submission.team_id,
+                contest_id=submission.contest_id,
+                points=points,
             )
             logger.info(
-                f"[submit] ACCEPTED: submission={submission.id}, "
-                f"+{contest_problem.points}pts for team {team_id}, "
+                f"[judge] ACCEPTED: submission={submission_id}, "
+                f"+{points}pts for team {submission.team_id}, "
                 f"passed={passed}/{len(test_cases)}, "
                 f"max_time={max_time_ms}ms, max_memory={max_memory_kb}KB"
             )
-            await broadcast_leaderboard(contest_id)
+            await broadcast_leaderboard(submission.contest_id)
         else:
             logger.info(
-                f"[submit] REJECTED: submission={submission.id}, "
+                f"[judge] REJECTED: submission={submission_id}, "
                 f"verdict={overall_verdict.value}, "
                 f"passed={passed}/{len(test_cases)}, "
                 f"max_time={max_time_ms}ms, max_memory={max_memory_kb}KB"

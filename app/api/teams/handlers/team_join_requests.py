@@ -2,7 +2,8 @@
 
 import logging
 
-from fastapi import BackgroundTasks, Body, Depends, Path
+from arq.connections import ArqRedis
+from fastapi import Body, Depends, Path
 
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
@@ -20,72 +21,10 @@ from app.api.teams.services.team_join_requests import (
     TeamJoinRequestService,
     get_team_join_request_service,
 )
+from app.core.arq_pool import get_arq_pool_dep
 from app.core.responses import MetaResponse
-from app.services.email import email_service
-from app.services.email.templates.team_join_request import (
-    team_join_request_accepted_template,
-    team_join_request_leader_template,
-)
 
 logger = logging.getLogger(__name__)
-
-
-# ── Background email tasks ─────────────────────────────────────────────────────
-
-
-def _send_leader_notification(
-    leader_email: str,
-    leader_name: str | None,
-    team_name: str,
-    requester_name: str | None,
-    requester_email: str,
-    role: str,
-    manage_url: str,
-) -> None:
-    try:
-        subject, html_body = team_join_request_leader_template(
-            leader_name=leader_name,
-            team_name=team_name,
-            requester_name=requester_name,
-            requester_email=requester_email,
-            role=role,
-            manage_url=manage_url,
-        )
-        email_service.send_email(
-            to_email=leader_email, subject=subject, body=html_body, html=True
-        )
-        logger.info(f"Join request leader notification sent to {leader_email}")
-    except Exception as e:
-        logger.error(
-            f"Failed to send join request leader notification to {leader_email}: {e}"
-        )
-
-
-def _send_acceptance_notification(
-    requester_email: str,
-    requester_name: str | None,
-    team_name: str,
-    role: str,
-    team_url: str,
-) -> None:
-    try:
-        subject, html_body = team_join_request_accepted_template(
-            requester_name=requester_name,
-            team_name=team_name,
-            role=role,
-            team_url=team_url,
-        )
-        email_service.send_email(
-            to_email=requester_email, subject=subject, body=html_body, html=True
-        )
-        logger.info(f"Join request acceptance email sent to {requester_email}")
-    except Exception as e:
-        logger.error(
-            f"Failed to send join request acceptance email to {requester_email}: {e}"
-        )
-
-
-# ── Handlers ───────────────────────────────────────────────────────────────────
 
 
 async def browse_teams_handler(
@@ -93,9 +32,7 @@ async def browse_teams_handler(
     current_user: UserWithPermissions = Depends(get_current_user),
     service: TeamJoinRequestService = Depends(get_team_join_request_service),
 ) -> BrowseTeamsResponse:
-    """Paginated list of teams the user is not yet in. Each item includes
-    member_count, is_open, and open_roles so the frontend can disable the
-    request button on full teams."""
+    """Paginated list of teams the user is not yet in."""
     items, total = await service.browse_teams(
         user_id=current_user.user_id,
         limit=pagination.limit,
@@ -111,9 +48,9 @@ async def browse_teams_handler(
 
 async def send_join_request_handler(
     request: JoinRequestCreateRequest = Body(...),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: UserWithPermissions = Depends(get_current_user),
     service: TeamJoinRequestService = Depends(get_team_join_request_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
 ) -> MessageResponse:
     """Send a join request to a team. Auto-assigns role; emails the leader."""
     result = await service.send_request(
@@ -122,8 +59,8 @@ async def send_join_request_handler(
     )
 
     if result.get("leader_email"):
-        background_tasks.add_task(
-            _send_leader_notification,
+        await arq_pool.enqueue_job(
+            "send_join_request_leader_task",
             leader_email=result["leader_email"],
             leader_name=result.get("leader_name"),
             team_name=result["team_name"],
@@ -166,9 +103,9 @@ async def list_my_join_requests_handler(
 async def accept_join_request_handler(
     team_id: str = Path(..., description="Team ID"),
     request_id: str = Path(..., description="Join request ID"),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: UserWithPermissions = Depends(get_current_user),
     service: TeamJoinRequestService = Depends(get_team_join_request_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
 ) -> MessageResponse:
     """Leader accepts a pending request; requester is added and emailed."""
     result = await service.accept(
@@ -178,8 +115,8 @@ async def accept_join_request_handler(
     )
 
     if result.get("requester_email"):
-        background_tasks.add_task(
-            _send_acceptance_notification,
+        await arq_pool.enqueue_job(
+            "send_join_request_accepted_task",
             requester_email=result["requester_email"],
             requester_name=result.get("requester_name"),
             team_name=result["team_name"],

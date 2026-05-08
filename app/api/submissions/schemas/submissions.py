@@ -109,9 +109,18 @@ class LatestSolutionResponseData(BaseSchema):
     updated_at: datetime
 
 
+class SubmitCodeAcceptedData(BaseSchema):
+    """Returned immediately (202) when a submission is accepted for background judging."""
+
+    submission_id: str
+    verdict: SubmissionVerdict  # always PENDING
+    message: str
+
+
 # ── Response Aliases ──────────────────────────────────────────────────────────
 
 SubmissionResponse = APIResponse[SubmissionResponseData]
 SubmissionDetailResponse = APIResponse[SubmissionDetailResponseData]
 SubmissionListResponse = APIResponse[list[SubmissionListItem]]
 LatestSolutionResponse = APIResponse[LatestSolutionResponseData]
+SubmitCodeAcceptedResponse = APIResponse[SubmitCodeAcceptedData]

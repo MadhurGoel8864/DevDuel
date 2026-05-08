@@ -64,3 +64,11 @@ n ?= 1
 .PHONY: run
 run:
 	uvicorn app.main:app --reload --host 0.0.0.0 --port 8150
+
+.PHONY: dev
+dev:
+	uvicorn app.main:app --reload --host 0.0.0.0 --port 8150
+
+.PHONY: worker
+worker:
+	poetry run arq app.workers.settings.WorkerSettings

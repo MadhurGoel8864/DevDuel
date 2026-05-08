@@ -1,0 +1,18 @@
+[Unit]
+Description=DevDuel ARQ Background Worker
+After=network.target redis.service postgresql.service
+Requires=redis.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/unthinkable-lap/Documents/Projects/Devdual_full/backend/DevDuel
+EnvironmentFile=/home/unthinkable-lap/Documents/Projects/Devdual_full/backend/DevDuel/.env
+ExecStart=/home/unthinkable-lap/Documents/Projects/Devdual_full/backend/DevDuel/.venv/bin/arq app.workers.settings.WorkerSettings
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=devduel-worker
+
+[Install]
+WantedBy=multi-user.target

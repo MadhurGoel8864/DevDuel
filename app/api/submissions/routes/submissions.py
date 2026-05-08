@@ -17,7 +17,7 @@ router.add_api_route(
     "/contests/{contest_id}/problems/{contest_problem_id}/submit",
     submit_code_handler,
     methods=["POST"],
-    status_code=201,
+    status_code=202,
 )
 
 # Get the latest submitted code for a team on a problem (must precede /{submission_id})
