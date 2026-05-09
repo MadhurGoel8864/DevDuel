@@ -4,6 +4,7 @@ import logging
 
 from arq.connections import ArqRedis
 from fastapi import Body, Depends, Path, Query
+from redis.asyncio import Redis
 
 from app.api.auth.dependencies import get_current_user, require_organizer
 from app.api.auth.schemas import UserWithPermissions
@@ -32,7 +33,13 @@ from app.api.contests.schemas.contests import (
 from app.api.contests.services.contests import ContestService, get_contest_service
 from app.core.arq_pool import get_arq_pool_dep
 from app.core.enums import ContestStatus
+from app.core.redis import get_redis_client
 from app.core.responses import MetaResponse
+from app.workers.tasks.contest_scheduler import (
+    cancel_contest_end_job,
+    cancel_contest_start_job,
+    schedule_contest_transitions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +48,8 @@ async def create_contest_handler(
     request: ContestCreateRequest = Body(...),
     current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
+    redis: Redis = Depends(get_redis_client),
 ) -> ContestResponse:
     """Create a new contest. Starts in DRAFT status. Requires organizer."""
     contest = await contest_service.create_contest(
@@ -53,6 +62,7 @@ async def create_contest_handler(
         allowed_email_domain=request.data.allowed_email_domain,
     )
     logger.info(f"Contest '{contest.name}' created by user {current_user.user_id}")
+    await schedule_contest_transitions(arq_pool, redis, contest.id, contest.start_time, contest.end_time)
     return ContestResponse(data=ContestResponseData.model_validate(contest))
 
 
@@ -62,6 +72,7 @@ async def edit_contest_handler(
     current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
     arq_pool: ArqRedis = Depends(get_arq_pool_dep),
+    redis: Redis = Depends(get_redis_client),
 ) -> ContestResponse:
     """
     Partially update a contest (organizer/creator only).
@@ -71,6 +82,7 @@ async def edit_contest_handler(
 
     If any fields actually changed AND there are registered teams,
     an update email is enqueued via ARQ for each member.
+    If start_time or end_time changed, existing scheduled jobs are replaced.
     """
     updated_contest, diff = await contest_service.edit_contest(
         contest_id=contest_id,
@@ -97,6 +109,14 @@ async def edit_contest_handler(
             logger.info(
                 f"Contest update emails enqueued for {len(emails)} member(s) "
                 f"— contest {contest_id}"
+            )
+
+        if "start_time" in diff or "end_time" in diff:
+            await cancel_contest_start_job(arq_pool, redis, contest_id)
+            await cancel_contest_end_job(arq_pool, redis, contest_id)
+            await schedule_contest_transitions(
+                arq_pool, redis, contest_id,
+                updated_contest.start_time, updated_contest.end_time,
             )
 
     return ContestResponse(data=ContestResponseData.model_validate(updated_contest))
@@ -326,15 +346,19 @@ async def start_contest_handler(
     contest_id: str = Path(..., description="Contest ID"),
     current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
+    redis: Redis = Depends(get_redis_client),
 ) -> ContestResponse:
     """Start a contest (REGISTRATION_OPEN → ACTIVE).
     Only the contest creator (organizer) may call this.
+    Cancels the scheduled auto-start job so it doesn't double-fire.
     """
     contest = await contest_service.update_contest_status(
         contest_id=contest_id,
         new_status=ContestStatus.ACTIVE,
         requesting_user_id=current_user.user_id,
     )
+    await cancel_contest_start_job(arq_pool, redis, contest_id)
     return ContestResponse(data=ContestResponseData.model_validate(contest))
 
 
@@ -342,13 +366,17 @@ async def end_contest_handler(
     contest_id: str = Path(..., description="Contest ID"),
     current_user: UserWithPermissions = Depends(require_organizer),
     contest_service: ContestService = Depends(get_contest_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
+    redis: Redis = Depends(get_redis_client),
 ) -> ContestResponse:
     """End a contest (ACTIVE → ENDED).
     Only the contest creator (organizer) may call this.
+    Cancels the scheduled auto-end job so it doesn't double-fire.
     """
     contest = await contest_service.update_contest_status(
         contest_id=contest_id,
         new_status=ContestStatus.ENDED,
         requesting_user_id=current_user.user_id,
     )
+    await cancel_contest_end_job(arq_pool, redis, contest_id)
     return ContestResponse(data=ContestResponseData.model_validate(contest))

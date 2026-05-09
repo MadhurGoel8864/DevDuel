@@ -10,7 +10,7 @@ import logging
 from arq import cron
 
 from app.core.arq_pool import get_arq_redis_settings
-from app.workers.tasks.contest_cron import auto_transition_contests
+from app.workers.tasks.contest_cron import auto_transition_contests, end_contest_task, start_contest_task
 from app.workers.tasks.email import (
     send_contest_update_task,
     send_join_request_accepted_task,
@@ -52,6 +52,8 @@ class WorkerSettings:
         send_join_request_leader_task,
         send_join_request_accepted_task,
         send_contest_update_task,
+        start_contest_task,
+        end_contest_task,
     ]
     cron_jobs = [
         cron(auto_transition_contests, second=0),  # runs at :00 of every minute
