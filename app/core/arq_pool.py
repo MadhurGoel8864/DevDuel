@@ -17,6 +17,7 @@ def get_arq_redis_settings() -> RedisSettings:
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,
         database=settings.REDIS_DB,
+        password=settings.REDIS_PASSWORD,
     )
 
 
