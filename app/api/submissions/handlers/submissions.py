@@ -2,11 +2,11 @@
 
 import logging
 
-from arq.connections import ArqRedis
 from fastapi import Body, Depends, Path
 
 from app.api.auth.dependencies import get_current_user
 from app.api.auth.schemas import UserWithPermissions
+from app.api.bidding.services.event_bus import fanout_bidding_event
 from app.api.submissions.schemas.submissions import (
     LatestSolutionResponse,
     LatestSolutionResponseData,
@@ -14,8 +14,6 @@ from app.api.submissions.schemas.submissions import (
     SubmissionDetailResponseData,
     SubmissionListItem,
     SubmissionListResponse,
-    SubmitCodeAcceptedData,
-    SubmitCodeAcceptedResponse,
     SubmitCodeRequest,
     TestResultResponseData,
 )
@@ -23,8 +21,6 @@ from app.api.submissions.services.submissions import (
     SubmissionService,
     get_submission_service,
 )
-from app.core.arq_pool import get_arq_pool_dep
-from app.core.enums import SubmissionVerdict
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +31,8 @@ async def submit_code_handler(
     request: SubmitCodeRequest = Body(...),
     current_user: UserWithPermissions = Depends(get_current_user),
     service: SubmissionService = Depends(get_submission_service),
-    arq_pool: ArqRedis = Depends(get_arq_pool_dep),
-) -> SubmitCodeAcceptedResponse:
-    """Accept a code submission for background judging.
-
-    Returns 202 immediately with verdict=PENDING.
-    Results are delivered via the bidding WebSocket as a SUBMISSION_RESULT event.
-    """
+) -> SubmissionDetailResponse:
+    """Submit code for judging. Blocks until Judge0 finishes and returns the full result."""
     submission, test_cases, points = await service.submit_code(
         contest_id=contest_id,
         contest_problem_id=contest_problem_id,
@@ -51,22 +42,29 @@ async def submit_code_handler(
         source_code=request.data.source_code,
     )
 
-    await arq_pool.enqueue_job(
-        "process_submission_task",
+    submission = await service.process_judging_result(
         submission_id=submission.id,
         test_cases=test_cases,
         points=points,
-        contest_id=contest_id,
-        _job_id=submission.id,  # idempotency — prevents duplicate processing
     )
 
-    return SubmitCodeAcceptedResponse(
-        data=SubmitCodeAcceptedData(
-            submission_id=submission.id,
-            verdict=SubmissionVerdict.PENDING,
-            message="Submission accepted. Results will be delivered via WebSocket.",
-        )
+    await fanout_bidding_event(
+        contest_id=contest_id,
+        payload={
+            "type": "SUBMISSION_RESULT",
+            "submission_id": submission.id,
+            "verdict": submission.verdict.value,
+            "passed_test_cases": submission.passed_test_cases,
+            "total_test_cases": submission.total_test_cases,
+        },
     )
+
+    data = SubmissionDetailResponseData.model_validate(submission)
+    data.test_results = [
+        TestResultResponseData.model_validate(tr)
+        for tr in submission.test_results
+    ]
+    return SubmissionDetailResponse(data=data)
 
 
 async def get_submission_handler(

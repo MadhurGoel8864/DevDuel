@@ -21,7 +21,7 @@ router.add_api_route(
     "/contests/{contest_id}/problems/{contest_problem_id}/submit",
     submit_code_handler,
     methods=["POST"],
-    status_code=202,
+    status_code=200,
     dependencies=[
         Depends(rate_limit("submit:burst", settings.SUBMIT_BURST_RATE_LIMIT, 8, by="user")),
         Depends(rate_limit("submit:sustained", settings.SUBMIT_SUSTAINED_RATE_LIMIT, 3600, by="user")),
