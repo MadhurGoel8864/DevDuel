@@ -52,10 +52,17 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
         meta=None,
     )
 
-    return JSONResponse(
+    response = JSONResponse(
         status_code=exc.status_code,
         content=response_data.model_dump(exclude_none=False),
     )
+    # RFC 6585 §4: 429 responses SHOULD include Retry-After.
+    # Client libraries and load balancers look for this header, not the body.
+    if exc.status_code == 429 and isinstance(exc.details, dict):
+        retry_after = exc.details.get("retry_after_seconds")
+        if retry_after is not None:
+            response.headers["Retry-After"] = str(retry_after)
+    return response
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

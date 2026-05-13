@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     # Server-side rate limit; kept conservative so fast bid wars are still possible.
     BID_COOLDOWN_MS: int = Field(default=800)
 
+    # ── HTTP Rate Limits (fixed-window counters, all keyed per IP unless noted) ──
+    # Auth endpoints — counts per window; windows are fixed in app/core/rate_limit.py
+    AUTH_LOGIN_RATE_LIMIT: int = Field(default=5)           # per 60 s
+    AUTH_REGISTER_RATE_LIMIT: int = Field(default=3)        # per 3600 s
+    AUTH_SEND_OTP_RATE_LIMIT: int = Field(default=5)        # per 600 s
+    AUTH_RESEND_OTP_RATE_LIMIT: int = Field(default=3)      # per 600 s
+    AUTH_VERIFY_OTP_RATE_LIMIT: int = Field(default=10)     # per 900 s
+    AUTH_FORGOT_PASSWORD_RATE_LIMIT: int = Field(default=3)  # per 600 s
+    AUTH_RESET_PASSWORD_RATE_LIMIT: int = Field(default=5)  # per 600 s
+    # Submission endpoint — keyed per user ID
+    SUBMIT_BURST_RATE_LIMIT: int = Field(default=1)         # per 8 s  (burst guard)
+    SUBMIT_SUSTAINED_RATE_LIMIT: int = Field(default=30)    # per 3600 s
+
     # SMTP Email Configuration (Optional - required only if using email service)
     smtp_host: str = Field(default="smtp.gmail.com")
     smtp_port: int = Field(default=587)
@@ -68,7 +81,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
-    SQLALCHEMY_DATABASE_URL: str = Field(default="") 
+    SQLALCHEMY_DATABASE_URL: str = Field(default="")
     # ── Frontend Base URL ──────────────────────────────────────────────────────
     FRONTEND_BASE_URL: str = Field(default="http://localhost:5173")
 

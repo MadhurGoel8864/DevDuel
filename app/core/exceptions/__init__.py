@@ -1,5 +1,6 @@
 """Exception module exports."""
 
+from app.core.exceptions.rate_limit import RateLimitExceededException
 from app.core.exceptions.auth import (
     ForbiddenException,
     InvalidTokenException,
@@ -39,6 +40,8 @@ from app.core.exceptions.users import (
 __all__ = [
     # Base
     "AppException",
+    # Rate limiting
+    "RateLimitExceededException",
     # User exceptions
     "UserNotFoundException",
     "UserAlreadyExistsException",
