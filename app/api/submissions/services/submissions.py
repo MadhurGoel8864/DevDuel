@@ -93,6 +93,15 @@ class NoTestCasesException(SubmissionException):
         )
 
 
+class NoSampleTestCasesException(SubmissionException):
+    def __init__(self):
+        super().__init__(
+            code="NO_SAMPLE_TEST_CASES",
+            message="This problem has no sample test cases to run against",
+            status_code=400,
+        )
+
+
 class JudgeServiceException(SubmissionException):
     def __init__(self, detail: str = ""):
         super().__init__(
@@ -321,6 +330,198 @@ class SubmissionService:
 
         # Phase 1 complete — polling and result processing happen in the ARQ task.
         return submission, test_cases, contest_problem.points
+
+    async def run_code(
+        self,
+        contest_id: str,
+        contest_problem_id: str,
+        team_id: str,
+        user_id: str,
+        language: str,
+        source_code: str,
+    ) -> dict:
+        """Run code against sample test cases only. No DB writes, no side effects.
+
+        Same validation as submit_code() except the SOLVED check is skipped —
+        users may run even after the problem is marked SOLVED.
+        Returns a dict matching RunCodeResultData; nothing is persisted.
+        """
+        logger.info(
+            f"[run] Starting: contest={contest_id}, problem={contest_problem_id}, "
+            f"team={team_id}, user={user_id}, lang={language}, "
+            f"code_len={len(source_code)} chars"
+        )
+
+        # ── 1. Validate contest is ACTIVE ─────────────────────────────────────
+        contest = await self._dao.get_contest(contest_id)
+        if not contest or contest.status != ContestStatus.ACTIVE:
+            logger.warning(
+                f"[run] Contest not active: {contest_id}, "
+                f"status={contest.status if contest else 'NOT_FOUND'}"
+            )
+            raise ContestNotActiveException()
+
+        # ── 2. Validate user has CODING role in team ──────────────────────────
+        member = await self._dao.get_team_member(team_id, user_id)
+        if not member or member.role != TeamRole.CODING:
+            logger.warning(
+                f"[run] User {user_id} not CODING role in team {team_id}, "
+                f"role={member.role if member else 'NOT_MEMBER'}"
+            )
+            raise NotCodingRoleException()
+
+        # ── 3. Validate assignment exists (SOLVED is OK for run) ──────────────
+        assignment = await self._dao.get_assignment(contest_problem_id, team_id)
+        if not assignment:
+            logger.warning(f"[run] No assignment: problem={contest_problem_id}, team={team_id}")
+            raise ProblemNotAssignedException()
+
+        # ── 4. Validate language ──────────────────────────────────────────────
+        language_lower = language.lower()
+        if language_lower not in SUPPORTED_LANGUAGES:
+            logger.warning(f"[run] Unsupported language: '{language}'")
+            raise UnsupportedLanguageException(language)
+        language_id = SUPPORTED_LANGUAGES[language_lower]
+
+        # ── 5. Fetch test cases from GCS (via cache, same as submit) ──────────
+        contest_problem = await self._dao.get_contest_problem(contest_problem_id)
+        if not contest_problem:
+            logger.warning(f"[run] Contest problem not found: {contest_problem_id}")
+            raise NoTestCasesException()
+
+        underlying_problem = contest_problem.resolved_problem
+        if not underlying_problem or not underlying_problem.test_cases_url:
+            logger.warning(
+                f"[run] No test cases URL on underlying problem for {contest_problem_id}"
+            )
+            raise NoTestCasesException()
+
+        gcs_url = underlying_problem.test_cases_url
+        test_cases = await get_cached_test_cases(gcs_url)
+        if test_cases is None:
+            try:
+                test_cases = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: storage_service.download_test_cases_from_url(gcs_url),
+                )
+            except StorageError as e:
+                logger.error(f"[run] GCS download failed: {e}")
+                raise NoTestCasesException()
+            await set_cached_test_cases(gcs_url, test_cases)
+            logger.info(f"[run] GCS cache miss — downloaded and cached {len(test_cases)} test cases")
+        else:
+            logger.info(f"[run] GCS cache hit — {len(test_cases)} test cases")
+
+        if not test_cases:
+            raise NoTestCasesException()
+
+        # ── 6. Filter to sample test cases only ──────────────────────────────
+        sample_cases = [tc for tc in test_cases if tc.get("is_sample", False)]
+        if not sample_cases:
+            logger.warning(f"[run] No sample test cases for problem {contest_problem_id}")
+            raise NoSampleTestCasesException()
+        logger.info(f"[run] Found {len(sample_cases)} sample test cases (of {len(test_cases)} total)")
+
+        # ── 7. Build Judge0 batch request for sample cases only ───────────────
+        source_b64 = base64.b64encode(source_code.encode()).decode()
+        cpu_time_limit = contest_problem.time_limit_ms / 1000.0
+        wall_time_limit = cpu_time_limit * 3
+        memory_limit = contest_problem.memory_limit_mb * 1024.0
+
+        judge0_submissions = []
+        for tc in sample_cases:
+            stdin_b64 = base64.b64encode(tc["input"].encode()).decode()
+            expected_b64 = base64.b64encode(tc["expected_output"].encode()).decode()
+            judge0_submissions.append(
+                Judge0SubmissionRequest(
+                    source_code=source_b64,
+                    language_id=language_id,
+                    stdin=stdin_b64,
+                    expected_output=expected_b64,
+                    cpu_time_limit=cpu_time_limit,
+                    wall_time_limit=wall_time_limit,
+                    memory_limit=memory_limit,
+                )
+            )
+
+        # ── 8. Submit to Judge0 and poll ──────────────────────────────────────
+        logger.info(f"[run] Sending {len(judge0_submissions)} sample test cases to Judge0")
+        try:
+            tokens = await self._judge0.create_batch_submissions(judge0_submissions)
+        except Judge0Error as e:
+            logger.error(f"[run] Judge0 batch submit failed: {e}")
+            raise JudgeServiceException(str(e))
+
+        try:
+            results = await self._judge0.poll_batch_until_done(tokens)
+        except Judge0TimeoutError as e:
+            logger.error(f"[run] Polling timed out: {e}")
+            raise JudgeServiceException("Execution timed out")
+        except Judge0Error as e:
+            logger.error(f"[run] Polling failed: {e}")
+            raise JudgeServiceException(str(e))
+
+        # ── 9. Build in-memory result (NO DB writes) ──────────────────────────
+        passed = 0
+        max_time_ms = 0
+        max_memory_kb = 0
+        overall_verdict = "ACCEPTED"
+        first_compile_output: str | None = None
+        first_stderr: str | None = None
+        first_error_message: str | None = None
+        test_result_list = []
+
+        for idx, (tc, result) in enumerate(zip(sample_cases, results)):
+            verdict_str = JUDGE0_TO_VERDICT.get(result.status.id, "INTERNAL_ERROR")
+            stdout_decoded = _b64_decode(result.stdout)
+            stderr_decoded = _b64_decode(result.stderr)
+            compile_decoded = _b64_decode(result.compile_output)
+
+            time_ms = int(result.time * 1000) if result.time else None
+            memory_kb = int(result.memory) if result.memory else None
+
+            if time_ms and time_ms > max_time_ms:
+                max_time_ms = time_ms
+            if memory_kb and memory_kb > max_memory_kb:
+                max_memory_kb = memory_kb
+
+            if result.status.id == 3:
+                passed += 1
+            elif overall_verdict == "ACCEPTED":
+                overall_verdict = verdict_str
+                first_compile_output = compile_decoded
+                first_stderr = stderr_decoded
+                first_error_message = result.message
+
+            test_result_list.append({
+                "test_case_index": idx,
+                "verdict": verdict_str,
+                "time_ms": time_ms,
+                "memory_kb": memory_kb,
+                "stdout": stdout_decoded,
+                "stderr": stderr_decoded,
+                "compile_output": compile_decoded,
+                "input": tc["input"],
+                "expected_output": tc["expected_output"],
+            })
+
+        logger.info(
+            f"[run] Complete: passed={passed}/{len(sample_cases)}, "
+            f"overall_verdict={overall_verdict}"
+        )
+
+        return {
+            "language": language_lower,
+            "passed": passed,
+            "total": len(sample_cases),
+            "overall_verdict": overall_verdict,
+            "max_time_ms": max_time_ms if max_time_ms else None,
+            "max_memory_kb": max_memory_kb if max_memory_kb else None,
+            "compile_output": first_compile_output,
+            "stderr": first_stderr,
+            "error_message": first_error_message,
+            "test_results": test_result_list,
+        }
 
     async def process_judging_result(
         self,

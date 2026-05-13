@@ -124,3 +124,57 @@ SubmissionDetailResponse = APIResponse[SubmissionDetailResponseData]
 SubmissionListResponse = APIResponse[list[SubmissionListItem]]
 LatestSolutionResponse = APIResponse[LatestSolutionResponseData]
 SubmitCodeAcceptedResponse = APIResponse[SubmitCodeAcceptedData]
+
+
+# ── Run Code Schemas ──────────────────────────────────────────────────────────
+
+
+class RunCodeData(BaseSchema):
+    """Payload for running code against sample test cases only."""
+
+    team_id: str
+    language: str
+    source_code: str
+
+    @field_validator("source_code")
+    @classmethod
+    def source_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("source_code cannot be empty")
+        return v
+
+
+class RunCodeRequest(BaseSchema):
+    data: RunCodeData
+
+
+class RunTestCaseResultData(BaseSchema):
+    """Per-sample-test-case result from a run (always has input/expected_output)."""
+
+    test_case_index: int
+    verdict: str
+    time_ms: Optional[int] = None
+    memory_kb: Optional[int] = None
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
+    compile_output: Optional[str] = None
+    input: str
+    expected_output: str
+
+
+class RunCodeResultData(BaseSchema):
+    """Full result from a run code operation. No submission ID, no DB record."""
+
+    language: str
+    passed: int
+    total: int
+    overall_verdict: str
+    max_time_ms: Optional[int] = None
+    max_memory_kb: Optional[int] = None
+    compile_output: Optional[str] = None
+    stderr: Optional[str] = None
+    error_message: Optional[str] = None
+    test_results: list[RunTestCaseResultData] = []
+
+
+RunCodeResponse = APIResponse[RunCodeResultData]

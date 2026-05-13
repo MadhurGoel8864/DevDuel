@@ -7,6 +7,7 @@ from app.api.submissions.handlers.submissions import (
     get_submission_handler,
     list_submissions_for_problem_handler,
     list_submissions_for_team_handler,
+    run_code_handler,
     submit_code_handler,
 )
 from app.core.config import settings
@@ -25,6 +26,18 @@ router.add_api_route(
     dependencies=[
         Depends(rate_limit("submit:burst", settings.SUBMIT_BURST_RATE_LIMIT, 8, by="user")),
         Depends(rate_limit("submit:sustained", settings.SUBMIT_SUSTAINED_RATE_LIMIT, 3600, by="user")),
+    ],
+)
+
+# Run code against sample test cases only — no DB writes, no side effects
+router.add_api_route(
+    "/contests/{contest_id}/problems/{contest_problem_id}/run",
+    run_code_handler,
+    methods=["POST"],
+    status_code=200,
+    dependencies=[
+        Depends(rate_limit("run:burst", settings.RUN_BURST_RATE_LIMIT, 5, by="user")),
+        Depends(rate_limit("run:sustained", settings.RUN_SUSTAINED_RATE_LIMIT, 3600, by="user")),
     ],
 )
 

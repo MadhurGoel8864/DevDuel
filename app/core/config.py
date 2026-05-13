@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     # Submission endpoint — keyed per user ID
     SUBMIT_BURST_RATE_LIMIT: int = Field(default=1)         # per 8 s  (burst guard)
     SUBMIT_SUSTAINED_RATE_LIMIT: int = Field(default=30)    # per 3600 s
+    RUN_BURST_RATE_LIMIT: int = Field(default=3)            # per 5 s
+    RUN_SUSTAINED_RATE_LIMIT: int = Field(default=60)       # per 3600 s
 
     # SMTP Email Configuration (Optional - required only if using email service)
     smtp_host: str = Field(default="smtp.gmail.com")
