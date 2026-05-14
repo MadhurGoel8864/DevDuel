@@ -27,6 +27,7 @@ from app.api.problems.handlers.test_cases import (
     get_test_cases_handler,
     upload_custom_test_cases_handler,
     upload_test_cases_handler,
+    validate_custom_problem_handler,
 )
 
 # ── /api/problems ─────────────────────────────────────────────────────────────
@@ -98,6 +99,12 @@ problems_router.add_api_route(
     get_custom_test_cases_handler,
     methods=["GET"],
     tags=["Custom Problems", "Test Cases"],
+)
+problems_router.add_api_route(
+    "/custom/{custom_problem_id}/validate",
+    validate_custom_problem_handler,
+    methods=["POST"],
+    tags=["Custom Problems"],
 )
 
 # Built-in problem detail + test cases (catch-all `/{problem_id}` last)

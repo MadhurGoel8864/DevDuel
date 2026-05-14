@@ -85,3 +85,11 @@ class SubmissionVerdict(str, Enum):
     RUNTIME_ERROR = "RUNTIME_ERROR"
     COMPILATION_ERROR = "COMPILATION_ERROR"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+
+
+class ValidationStatus(str, Enum):
+    """Validation status for a custom problem's test cases."""
+
+    UNVALIDATED = "UNVALIDATED"
+    VALID = "VALID"
+    INVALID = "INVALID"

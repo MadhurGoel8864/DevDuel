@@ -210,3 +210,31 @@ class BuiltinProblemSlugConflictException(AppException):
             status_code=409,
             details=details,
         )
+
+
+class CustomProblemNotValidatedException(AppException):
+    """Raised when importing a custom problem that has not been validated. HTTP 422."""
+
+    def __init__(self, custom_problem_id: Optional[str] = None):
+        details = {"custom_problem_id": custom_problem_id} if custom_problem_id else None
+        super().__init__(
+            code="CUSTOM_PROBLEM_NOT_VALIDATED",
+            message=(
+                "This custom problem must pass validation before it can be imported into a contest. "
+                "Upload test cases and run /validate with a reference solution first."
+            ),
+            status_code=422,
+            details=details,
+        )
+
+
+class InvalidLanguageException(AppException):
+    """Raised when an unsupported language is used for problem validation. HTTP 400."""
+
+    def __init__(self, language: str, supported: list[str]):
+        super().__init__(
+            code="INVALID_LANGUAGE",
+            message=f"Language '{language}' is not supported. Supported: {', '.join(supported)}",
+            status_code=400,
+            details={"language": language, "supported": supported},
+        )

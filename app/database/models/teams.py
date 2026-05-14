@@ -46,7 +46,7 @@ class TeamMember(Base, TimestampMixin):
     role = mapped_column(Enum(TeamRole), nullable=False)
 
     team = relationship("Team", back_populates="members")
-    user = relationship("User")
+    user = relationship("User", lazy="selectin")
 
     __table_args__ = (
         UniqueConstraint("team_id", "user_id", name="uq_team_user"),

@@ -8,7 +8,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.enums import Difficulty, ProblemKind
+from app.core.enums import Difficulty, ProblemKind, ValidationStatus
 from app.database.models.contests import Contest
 from app.database.models.problems import (
     BuiltinProblem,
@@ -152,7 +152,23 @@ class CustomProblemDAO:
     async def set_test_cases_url(
         self, problem: CustomProblem, url: str
     ) -> CustomProblem:
+        # Reset validation whenever test cases are replaced.
         problem.test_cases_url = url
+        problem.validation_status = ValidationStatus.UNVALIDATED
+        problem.validated_at = None
+        self._session.add(problem)
+        await self._session.commit()
+        await self._session.refresh(problem)
+        return problem
+
+    async def set_validation_status(
+        self,
+        problem: CustomProblem,
+        status: ValidationStatus,
+        validated_at=None,
+    ) -> CustomProblem:
+        problem.validation_status = status
+        problem.validated_at = validated_at
         self._session.add(problem)
         await self._session.commit()
         await self._session.refresh(problem)

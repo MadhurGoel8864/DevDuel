@@ -11,10 +11,17 @@ from app.api.problems.dao.problems import (
     BuiltinProblemDAO,
     get_builtin_problem_dao,
 )
+from app.api.problems.schemas.problems import (
+    ValidateProblemRequest,
+    ValidateProblemResponse,
+    ValidateProblemResponseData,
+    ValidationTestResult,
+)
 from app.api.problems.services.problems import (
     CustomProblemService,
     get_custom_problem_service,
 )
+from app.api.submissions.services.submissions import judge0_client
 from app.core.exceptions.problems import (
     BuiltinProblemNotFoundException,
     TestCasesNotFoundException,
@@ -198,6 +205,35 @@ async def get_custom_test_cases_handler(
             test_cases=test_cases,
             total_count=len(test_cases),
             sample_count=len(samples),
+        )
+    )
+
+
+async def validate_custom_problem_handler(
+    custom_problem_id: str = Path(..., description="Custom Problem ID"),
+    request: ValidateProblemRequest = Body(...),
+    current_user: UserWithPermissions = Depends(require_organizer),
+    service: CustomProblemService = Depends(get_custom_problem_service),
+) -> ValidateProblemResponse:
+    """Run a reference solution against all test cases to validate a custom problem.
+
+    Sets validation_status=VALID only if every test case passes.
+    The problem must be validated before it can be imported into a contest.
+    """
+    result = await service.validate(
+        user_id=current_user.user_id,
+        custom_problem_id=custom_problem_id,
+        language=request.data.language,
+        source_code=request.data.source_code,
+        judge0=judge0_client,
+    )
+    return ValidateProblemResponse(
+        data=ValidateProblemResponseData(
+            problem_id=result["problem_id"],
+            validation_status=result["validation_status"],
+            passed=result["passed"],
+            total=result["total"],
+            test_results=[ValidationTestResult(**tr) for tr in result["test_results"]],
         )
     )
 

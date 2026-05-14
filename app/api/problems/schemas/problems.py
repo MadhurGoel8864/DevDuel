@@ -174,8 +174,47 @@ class CustomProblemResponseData(BaseSchema):
     memory_limit_mb: int
     is_active: bool
     test_cases_url: Optional[str] = None
+    validation_status: str = "UNVALIDATED"
+    validated_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+
+
+# ── Problem validation schemas ────────────────────────────────────────────────
+
+
+class ValidateProblemData(BaseSchema):
+    language: str = Field(..., min_length=1, max_length=50)
+    source_code: str = Field(..., min_length=1)
+
+
+class ValidateProblemRequest(BaseSchema):
+    data: ValidateProblemData
+
+
+class ValidationTestResult(BaseSchema):
+    index: int
+    is_sample: bool
+    passed: bool
+    verdict: str
+    input: str
+    expected_output: str
+    actual_output: Optional[str] = None
+    time_ms: Optional[int] = None
+    memory_kb: Optional[int] = None
+    stderr: Optional[str] = None
+    compile_output: Optional[str] = None
+
+
+class ValidateProblemResponseData(BaseSchema):
+    problem_id: str
+    validation_status: str
+    passed: int
+    total: int
+    test_results: list[ValidationTestResult]
+
+
+ValidateProblemResponse = APIResponse[ValidateProblemResponseData]
 
 
 # ── Contest problem schemas ────────────────────────────────────────────────────
@@ -280,6 +319,11 @@ __all__ = [
     "CustomProblemResponseData",
     "CustomProblemResponse",
     "CustomProblemListResponse",
+    "ValidateProblemData",
+    "ValidateProblemRequest",
+    "ValidationTestResult",
+    "ValidateProblemResponseData",
+    "ValidateProblemResponse",
     "ImportProblemData",
     "ImportProblemRequest",
     "ContestProblemUpdateData",

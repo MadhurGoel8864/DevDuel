@@ -14,7 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import mapped_column, relationship
 
-from app.core.enums import Difficulty, ProblemKind
+from app.core.enums import Difficulty, ProblemKind, ValidationStatus
 from app.database.models.base import Base
 from app.database.utils import generate_uuid
 
@@ -116,6 +116,18 @@ class CustomProblem(Base):
     is_active = mapped_column(Boolean, default=True, nullable=False)
 
     test_cases_url = mapped_column(String(1024), nullable=True)
+
+    validation_status = mapped_column(
+        Enum(
+            ValidationStatus,
+            name="validation_status",
+            values_callable=lambda enum: [e.value for e in enum],
+        ),
+        default=ValidationStatus.UNVALIDATED,
+        server_default=ValidationStatus.UNVALIDATED.value,
+        nullable=False,
+    )
+    validated_at = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at = mapped_column(
         DateTime(timezone=True),

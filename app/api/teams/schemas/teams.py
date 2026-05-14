@@ -46,6 +46,23 @@ class TeamMemberResponseData(BaseSchema, ISTDatetimeMixin):
     user_id: str
     role: TeamRole
     created_at: datetime
+    username: str | None = None
+    email: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def extract_user_fields(cls, data):
+        if hasattr(data, "user") and data.user is not None:
+            return {
+                "id": data.id,
+                "team_id": data.team_id,
+                "user_id": data.user_id,
+                "role": data.role,
+                "created_at": data.created_at,
+                "username": data.user.username,
+                "email": data.user.email,
+            }
+        return data
 
 
 class TeamResponseData(BaseSchema, ISTDatetimeMixin):

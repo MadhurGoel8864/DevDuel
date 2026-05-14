@@ -326,7 +326,10 @@ class TeamJoinRequestDAO:
             result = await self._session.execute(
                 select(TeamJoinRequest)
                 .where(TeamJoinRequest.user_id == user_id)
-                .options(selectinload(TeamJoinRequest.team))
+                .options(
+                    selectinload(TeamJoinRequest.team),
+                    selectinload(TeamJoinRequest.user),
+                )
                 .order_by(TeamJoinRequest.created_at.desc())
             )
             return list(result.scalars().all())
