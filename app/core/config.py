@@ -58,18 +58,18 @@ class Settings(BaseSettings):
 
     # ── HTTP Rate Limits (fixed-window counters, all keyed per IP unless noted) ──
     # Auth endpoints — counts per window; windows are fixed in app/core/rate_limit.py
-    AUTH_LOGIN_RATE_LIMIT: int = Field(default=5)           # per 60 s
-    AUTH_REGISTER_RATE_LIMIT: int = Field(default=3)        # per 3600 s
-    AUTH_SEND_OTP_RATE_LIMIT: int = Field(default=5)        # per 600 s
-    AUTH_RESEND_OTP_RATE_LIMIT: int = Field(default=3)      # per 600 s
-    AUTH_VERIFY_OTP_RATE_LIMIT: int = Field(default=10)     # per 900 s
-    AUTH_FORGOT_PASSWORD_RATE_LIMIT: int = Field(default=3)  # per 600 s
-    AUTH_RESET_PASSWORD_RATE_LIMIT: int = Field(default=5)  # per 600 s
+    AUTH_LOGIN_RATE_LIMIT: int = Field(default=15)          # per 60 s
+    AUTH_REGISTER_RATE_LIMIT: int = Field(default=5)        # per 3600 s
+    AUTH_SEND_OTP_RATE_LIMIT: int = Field(default=10)       # per 600 s
+    AUTH_RESEND_OTP_RATE_LIMIT: int = Field(default=5)      # per 600 s
+    AUTH_VERIFY_OTP_RATE_LIMIT: int = Field(default=15)     # per 900 s
+    AUTH_FORGOT_PASSWORD_RATE_LIMIT: int = Field(default=5)  # per 600 s
+    AUTH_RESET_PASSWORD_RATE_LIMIT: int = Field(default=10)  # per 600 s
     # Submission endpoint — keyed per user ID
-    SUBMIT_BURST_RATE_LIMIT: int = Field(default=1)         # per 8 s  (burst guard)
-    SUBMIT_SUSTAINED_RATE_LIMIT: int = Field(default=30)    # per 3600 s
-    RUN_BURST_RATE_LIMIT: int = Field(default=3)            # per 5 s
-    RUN_SUSTAINED_RATE_LIMIT: int = Field(default=60)       # per 3600 s
+    SUBMIT_BURST_RATE_LIMIT: int = Field(default=3)         # per 8 s  (burst guard)
+    SUBMIT_SUSTAINED_RATE_LIMIT: int = Field(default=100)   # per 3600 s
+    RUN_BURST_RATE_LIMIT: int = Field(default=6)            # per 5 s
+    RUN_SUSTAINED_RATE_LIMIT: int = Field(default=150)      # per 3600 s
 
     # SMTP Email Configuration (Optional - required only if using email service)
     smtp_host: str = Field(default="smtp.gmail.com")
