@@ -402,7 +402,7 @@ All configuration is loaded from the `.env` file via Pydantic settings.
 
 | Variable                   | Description                                      | Default              |
 | -------------------------- | ------------------------------------------------ | -------------------- |
-| `APP_NAME`                 | Application name                                 | `DevDual`            |
+| `APP_NAME`                 | Application name                                 | `DevDuel`            |
 | `DEBUG`                    | Debug mode                                       | `false`              |
 | `ENV`                      | Environment (`development`/`production`)          | `development`        |
 | `ALLOWED_ORIGINS`          | Pipe-separated CORS origins                      | `http://localhost:3000` |

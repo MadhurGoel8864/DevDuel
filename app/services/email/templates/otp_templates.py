@@ -115,7 +115,7 @@ def otp_email_template(otp: str) -> tuple[str, str]:
 
             <div class="footer">
                 <p>This is an automated message, please do not reply to this email.</p>
-                <p>&copy; 2026 DevDual. All rights reserved.</p>
+                <p>&copy; 2026 DevDuel. All rights reserved.</p>
             </div>
         </div>
     </body>

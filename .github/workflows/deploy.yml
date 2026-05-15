@@ -1,4 +1,4 @@
-name: Deploy DevDual
+name: Deploy DevDuel
 
 on:
   push:

@@ -1,5 +1,5 @@
 # Project settings
-PROJECT_NAME=DevDual
+PROJECT_NAME=DevDuel
 APP_MODULE=app.main:app
 HOST=127.0.0.1
 PORT=8000
