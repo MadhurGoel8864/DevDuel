@@ -151,7 +151,7 @@ class TeamJoinRequestService:
         leader = await self._user_dao.get_by_id(team.created_by)
         requester = await self._user_dao.get_by_id(user_id)
 
-        manage_url = f"{settings.FRONTEND_BASE_URL}/teams/{team_id}"
+        manage_url = f"{settings.FRONTEND_BASE_URL}/team/{team_id}"
 
         return {
             "request_id": req.id,
@@ -248,7 +248,7 @@ class TeamJoinRequestService:
         )
 
         requester = req.user or await self._user_dao.get_by_id(req.user_id)
-        team_url = f"{settings.FRONTEND_BASE_URL}/teams/{team_id}"
+        team_url = f"{settings.FRONTEND_BASE_URL}/team/{team_id}"
 
         logger.info(
             f"Join request {req.id} accepted: user {req.user_id} → team {team_id} "
