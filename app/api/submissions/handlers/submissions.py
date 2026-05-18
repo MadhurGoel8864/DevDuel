@@ -37,7 +37,7 @@ async def submit_code_handler(
     service: SubmissionService = Depends(get_submission_service),
 ) -> SubmissionDetailResponse:
     """Submit code for judging. Blocks until Judge0 finishes and returns the full result."""
-    submission, test_cases, points = await service.submit_code(
+    submission, test_cases, points, memory_limit_kb = await service.submit_code(
         contest_id=contest_id,
         contest_problem_id=contest_problem_id,
         team_id=request.data.team_id,
@@ -50,6 +50,7 @@ async def submit_code_handler(
         submission_id=submission.id,
         test_cases=test_cases,
         points=points,
+        memory_limit_kb=memory_limit_kb,
     )
 
     await fanout_bidding_event(

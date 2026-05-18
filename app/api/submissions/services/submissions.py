@@ -158,7 +158,7 @@ class SubmissionService:
         user_id: str,
         language: str,
         source_code: str,
-    ) -> tuple["Submission", list[dict], int]:
+    ) -> tuple["Submission", list[dict], int, float]:
         """Phase 1 of the judging pipeline: validate → fetch test cases → submit to Judge0.
 
         Returns (submission, test_cases, points). The submission has verdict=PENDING.
@@ -329,7 +329,7 @@ class SubmissionService:
         logger.info(f"[submit] Judge0 tokens saved: submission={submission.id}, tokens={len(tokens)}")
 
         # Phase 1 complete — polling and result processing happen in the ARQ task.
-        return submission, test_cases, contest_problem.points
+        return submission, test_cases, contest_problem.points, memory_limit
 
     async def run_code(
         self,
@@ -485,6 +485,9 @@ class SubmissionService:
             if memory_kb and memory_kb > max_memory_kb:
                 max_memory_kb = memory_kb
 
+            if verdict_str == "RUNTIME_ERROR" and memory_kb is not None and memory_kb >= memory_limit:
+                verdict_str = "MEMORY_LIMIT_EXCEEDED"
+
             if result.status.id == 3:
                 passed += 1
             elif overall_verdict == "ACCEPTED":
@@ -528,6 +531,7 @@ class SubmissionService:
         submission_id: str,
         test_cases: list[dict],
         points: int,
+        memory_limit_kb: float,
     ) -> Submission:
         """Phase 2: poll Judge0, process results, update DB, broadcast leaderboard.
 
@@ -587,6 +591,12 @@ class SubmissionService:
                 max_time_ms = time_ms
             if memory_kb and memory_kb > max_memory_kb:
                 max_memory_kb = memory_kb
+
+            # Judge0 CE has no native MLE status — memory overflows are reported as
+            # runtime errors (SIGSEGV, SIGABRT, etc.). Reclassify when memory usage
+            # meets or exceeds the limit we sent.
+            if verdict_str == "RUNTIME_ERROR" and memory_kb is not None and memory_kb >= memory_limit_kb:
+                verdict_str = "MEMORY_LIMIT_EXCEEDED"
 
             if result.status.id == 3:  # ACCEPTED
                 passed += 1

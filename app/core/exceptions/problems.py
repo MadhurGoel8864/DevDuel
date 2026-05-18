@@ -238,3 +238,14 @@ class InvalidLanguageException(AppException):
             status_code=400,
             details={"language": language, "supported": supported},
         )
+
+
+class Judge0TimeoutException(AppException):
+    """Raised when Judge0 polling exceeds the max attempts. HTTP 504."""
+
+    def __init__(self, message: Optional[str] = None):
+        super().__init__(
+            code="JUDGE0_TIMEOUT",
+            message=message or "Code execution timed out. Try reducing the number of test cases or increasing the time limit.",
+            status_code=504,
+        )

@@ -12,6 +12,8 @@ from app.api.problems.dao.problems import (
     get_builtin_problem_dao,
 )
 from app.api.problems.schemas.problems import (
+    ProbeResultResponse,
+    ProbeResultResponseData,
     ValidateProblemRequest,
     ValidateProblemResponse,
     ValidateProblemResponseData,
@@ -231,6 +233,34 @@ async def validate_custom_problem_handler(
         data=ValidateProblemResponseData(
             problem_id=result["problem_id"],
             validation_status=result["validation_status"],
+            passed=result["passed"],
+            total=result["total"],
+            test_results=[ValidationTestResult(**tr) for tr in result["test_results"]],
+        )
+    )
+
+
+async def probe_custom_problem_handler(
+    custom_problem_id: str = Path(..., description="Custom Problem ID"),
+    request: ValidateProblemRequest = Body(...),
+    current_user: UserWithPermissions = Depends(require_organizer),
+    service: CustomProblemService = Depends(get_custom_problem_service),
+) -> ProbeResultResponse:
+    """Run any solution against all test cases without changing validation_status.
+
+    Use this to calibrate time/memory limits — test optimised and brute-force
+    solutions side by side before committing to a reference run via /validate.
+    """
+    result = await service.probe(
+        user_id=current_user.user_id,
+        custom_problem_id=custom_problem_id,
+        language=request.data.language,
+        source_code=request.data.source_code,
+        judge0=judge0_client,
+    )
+    return ProbeResultResponse(
+        data=ProbeResultResponseData(
+            problem_id=result["problem_id"],
             passed=result["passed"],
             total=result["total"],
             test_results=[ValidationTestResult(**tr) for tr in result["test_results"]],

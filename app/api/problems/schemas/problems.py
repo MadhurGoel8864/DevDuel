@@ -217,6 +217,16 @@ class ValidateProblemResponseData(BaseSchema):
 ValidateProblemResponse = APIResponse[ValidateProblemResponseData]
 
 
+class ProbeResultResponseData(BaseSchema):
+    problem_id: str
+    passed: int
+    total: int
+    test_results: list[ValidationTestResult]
+
+
+ProbeResultResponse = APIResponse[ProbeResultResponseData]
+
+
 # ── Contest problem schemas ────────────────────────────────────────────────────
 
 
@@ -324,6 +334,8 @@ __all__ = [
     "ValidationTestResult",
     "ValidateProblemResponseData",
     "ValidateProblemResponse",
+    "ProbeResultResponseData",
+    "ProbeResultResponse",
     "ImportProblemData",
     "ImportProblemRequest",
     "ContestProblemUpdateData",
