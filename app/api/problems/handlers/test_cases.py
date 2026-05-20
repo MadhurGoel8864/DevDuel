@@ -20,7 +20,9 @@ from app.api.problems.schemas.problems import (
     ValidationTestResult,
 )
 from app.api.problems.services.problems import (
+    BuiltinProblemService,
     CustomProblemService,
+    get_builtin_problem_service,
     get_custom_problem_service,
 )
 from app.api.submissions.services.submissions import judge0_client
@@ -254,6 +256,33 @@ async def probe_custom_problem_handler(
     result = await service.probe(
         user_id=current_user.user_id,
         custom_problem_id=custom_problem_id,
+        language=request.data.language,
+        source_code=request.data.source_code,
+        judge0=judge0_client,
+    )
+    return ProbeResultResponse(
+        data=ProbeResultResponseData(
+            problem_id=result["problem_id"],
+            passed=result["passed"],
+            total=result["total"],
+            test_results=[ValidationTestResult(**tr) for tr in result["test_results"]],
+        )
+    )
+
+
+async def probe_builtin_problem_handler(
+    problem_id: str = Path(..., description="Builtin Problem ID"),
+    request: ValidateProblemRequest = Body(...),
+    current_user: UserWithPermissions = Depends(require_admin),
+    service: BuiltinProblemService = Depends(get_builtin_problem_service),
+) -> ProbeResultResponse:
+    """Run any solution against all test cases for a built-in problem without any DB writes.
+
+    Use this to calibrate time/memory limits — test optimised and brute-force
+    solutions to confirm the right ones pass and slow ones TLE. Requires admin role.
+    """
+    result = await service.probe(
+        problem_id=problem_id,
         language=request.data.language,
         source_code=request.data.source_code,
         judge0=judge0_client,

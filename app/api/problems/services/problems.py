@@ -172,6 +172,125 @@ class BuiltinProblemService:
     ) -> BuiltinProblem:
         return await self._builtin_dao.set_test_cases_url(problem, url)
 
+    async def probe(
+        self,
+        problem_id: str,
+        language: str,
+        source_code: str,
+        judge0: Judge0Client,
+    ) -> dict:
+        """Run any solution against a built-in problem's test cases without any DB writes.
+
+        Use this to calibrate time/memory limits — test optimised and brute-force
+        solutions to confirm the right ones pass and slow ones TLE.
+        """
+        problem = await self._builtin_dao.get_by_id(problem_id)
+        if not problem or not problem.is_active:
+            raise BuiltinProblemNotFoundException(builtin_problem_id=problem_id)
+
+        if not problem.test_cases_url:
+            raise TestCasesNotFoundException(problem_id=problem_id)
+
+        try:
+            test_cases = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: storage_service.download_test_cases_from_url(
+                    problem.test_cases_url
+                ),
+            )
+        except StorageError:
+            raise TestCasesNotFoundException(problem_id=problem_id)
+
+        if not test_cases:
+            raise TestCasesNotFoundException(problem_id=problem_id)
+
+        language_lower = language.lower()
+        if language_lower not in SUPPORTED_LANGUAGES:
+            raise InvalidLanguageException(
+                language=language,
+                supported=list(SUPPORTED_LANGUAGES.keys()),
+            )
+        language_id = SUPPORTED_LANGUAGES[language_lower]
+
+        source_b64 = base64.b64encode(source_code.encode()).decode()
+        cpu_time_limit = problem.time_limit_ms / 1000.0
+        wall_time_limit = cpu_time_limit * 3
+        memory_limit = problem.memory_limit_mb * 1024.0
+
+        judge0_submissions = []
+        for tc in test_cases:
+            stdin_b64 = base64.b64encode(tc["input"].encode()).decode()
+            expected_b64 = base64.b64encode(tc["expected_output"].encode()).decode()
+            judge0_submissions.append(
+                Judge0SubmissionRequest(
+                    source_code=source_b64,
+                    language_id=language_id,
+                    stdin=stdin_b64,
+                    expected_output=expected_b64,
+                    cpu_time_limit=cpu_time_limit,
+                    wall_time_limit=wall_time_limit,
+                    memory_limit=memory_limit,
+                )
+            )
+
+        logger.info(
+            f"[builtin_probe] Submitting {len(judge0_submissions)} test cases to Judge0 "
+            f"for builtin problem {problem_id}"
+        )
+        try:
+            tokens = await judge0.create_batch_submissions(judge0_submissions)
+        except Judge0Error as e:
+            logger.error(f"[builtin_probe] Judge0 batch submit failed: {e}")
+            raise
+
+        try:
+            results = await judge0.poll_batch_until_done(tokens)
+        except Judge0TimeoutError as e:
+            logger.error(f"[builtin_probe] Judge0 polling failed: {e}")
+            raise Judge0TimeoutException() from e
+        except Judge0Error as e:
+            logger.error(f"[builtin_probe] Judge0 polling failed: {e}")
+            raise
+
+        passed = 0
+        test_result_list = []
+        for idx, (tc, result) in enumerate(zip(test_cases, results)):
+            verdict_str = JUDGE0_TO_VERDICT.get(result.status.id, "INTERNAL_ERROR")
+            memory_kb = int(result.memory) if result.memory else None
+            if verdict_str == "RUNTIME_ERROR" and memory_kb is not None and memory_kb >= memory_limit:
+                verdict_str = "MEMORY_LIMIT_EXCEEDED"
+            tc_passed = result.status.id == 3
+            if tc_passed:
+                passed += 1
+
+            test_result_list.append(
+                {
+                    "index": idx,
+                    "is_sample": bool(tc.get("is_sample", False)),
+                    "passed": tc_passed,
+                    "verdict": verdict_str,
+                    "input": tc["input"],
+                    "expected_output": tc["expected_output"],
+                    "actual_output": _b64_decode(result.stdout),
+                    "time_ms": int(result.time * 1000) if result.time else None,
+                    "memory_kb": memory_kb,
+                    "stderr": _b64_decode(result.stderr),
+                    "compile_output": _b64_decode(result.compile_output),
+                }
+            )
+
+        logger.info(
+            f"[builtin_probe] Builtin problem {problem_id}: "
+            f"passed={passed}/{len(test_cases)}"
+        )
+
+        return {
+            "problem_id": problem_id,
+            "passed": passed,
+            "total": len(test_cases),
+            "test_results": test_result_list,
+        }
+
 
 class CustomProblemService:
     """Business logic for admin-authored problems."""

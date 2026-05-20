@@ -25,6 +25,7 @@ from app.api.problems.handlers.problems import (
 from app.api.problems.handlers.test_cases import (
     get_custom_test_cases_handler,
     get_test_cases_handler,
+    probe_builtin_problem_handler,
     probe_custom_problem_handler,
     upload_custom_test_cases_handler,
     upload_test_cases_handler,
@@ -53,6 +54,12 @@ problems_router.add_api_route(
     "/builtin/problems/{problem_id}",
     delete_builtin_problem_handler,
     methods=["DELETE"],
+)
+problems_router.add_api_route(
+    "/builtin/problems/{problem_id}/playground",
+    probe_builtin_problem_handler,
+    methods=["POST"],
+    tags=["Problems"],
 )
 
 # Custom (admin-authored) problems CRUD — must be declared BEFORE the
