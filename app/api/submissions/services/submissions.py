@@ -22,7 +22,7 @@ from app.database.models.submissions import (
     TeamProblemSolution,
 )
 from app.services.judge0.client import Judge0Client, Judge0Error, Judge0TimeoutError
-from app.services.judge0.constants import JUDGE0_TO_VERDICT, SUPPORTED_LANGUAGES
+from app.services.judge0.constants import JUDGE0_TO_VERDICT, Judge0StatusId, SUPPORTED_LANGUAGES
 from app.services.judge0.schemas import Judge0SubmissionRequest
 from app.services.storage import storage_service
 from app.services.storage.cache import get_cached_test_cases, set_cached_test_cases
@@ -453,7 +453,7 @@ class SubmissionService:
             raise JudgeServiceException(str(e))
 
         try:
-            results = await self._judge0.poll_batch_until_done(tokens)
+            results = await self._judge0.poll_batch_fail_fast(tokens)
         except Judge0TimeoutError as e:
             logger.error(f"[run] Polling timed out: {e}")
             raise JudgeServiceException("Execution timed out")
@@ -472,6 +472,10 @@ class SubmissionService:
         test_result_list = []
 
         for idx, (tc, result) in enumerate(zip(sample_cases, results)):
+            # Still in-queue/processing when fail-fast exited — not evaluated.
+            if result.status.id <= Judge0StatusId.PROCESSING:
+                continue
+
             verdict_str = JUDGE0_TO_VERDICT.get(result.status.id, "INTERNAL_ERROR")
             stdout_decoded = _b64_decode(result.stdout)
             stderr_decoded = _b64_decode(result.stderr)
@@ -488,7 +492,7 @@ class SubmissionService:
             if verdict_str == "RUNTIME_ERROR" and memory_kb is not None and memory_kb >= memory_limit:
                 verdict_str = "MEMORY_LIMIT_EXCEEDED"
 
-            if result.status.id == 3:
+            if result.status.id == Judge0StatusId.ACCEPTED:
                 passed += 1
             elif overall_verdict == "ACCEPTED":
                 overall_verdict = verdict_str
@@ -550,9 +554,9 @@ class SubmissionService:
             await self._dao.update_submission(submission)
             return submission
 
-        # ── 9. Poll until all done ────────────────────────────────────────────
+        # ── 9. Poll until done or first failure ───────────────────────────────
         try:
-            results = await self._judge0.poll_batch_until_done(tokens)
+            results = await self._judge0.poll_batch_fail_fast(tokens)
         except Judge0TimeoutError as e:
             logger.error(f"[judge] Polling timed out for submission {submission_id}: {e}")
             submission.verdict = SubmissionVerdict.INTERNAL_ERROR
@@ -578,6 +582,10 @@ class SubmissionService:
         test_result_records = []
 
         for idx, (tc, result) in enumerate(zip(test_cases, results)):
+            # Still in-queue/processing when fail-fast exited — not evaluated.
+            if result.status.id <= Judge0StatusId.PROCESSING:
+                continue
+
             verdict_str = JUDGE0_TO_VERDICT.get(result.status.id, "INTERNAL_ERROR")
 
             stdout_decoded = _b64_decode(result.stdout)
@@ -598,7 +606,7 @@ class SubmissionService:
             if verdict_str == "RUNTIME_ERROR" and memory_kb is not None and memory_kb >= memory_limit_kb:
                 verdict_str = "MEMORY_LIMIT_EXCEEDED"
 
-            if result.status.id == 3:  # ACCEPTED
+            if result.status.id == Judge0StatusId.ACCEPTED:
                 passed += 1
             elif overall_verdict == SubmissionVerdict.ACCEPTED:
                 overall_verdict = SubmissionVerdict(verdict_str)

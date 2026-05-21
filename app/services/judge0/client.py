@@ -270,6 +270,68 @@ class Judge0Client:
             f"{len(still_processing)} submissions still processing."
         )
 
+    async def poll_batch_fail_fast(
+        self, tokens: list[str]
+    ) -> list[Judge0SubmissionResult]:
+        """Poll batch submissions, returning early on the first failure.
+
+        Returns as soon as any token has a non-ACCEPTED terminal status, or once
+        every token reaches ACCEPTED. Tokens still IN_QUEUE/PROCESSING when a
+        failure is found are returned as-is (status.id <= 2) — callers must skip them.
+
+        Raises:
+            Judge0TimeoutError: If max attempts exceeded with submissions still processing.
+        """
+        interval_s = self._poll_interval_ms / 1000.0
+        logger.info(
+            f"[judge0] Fail-fast polling: {len(tokens)} tokens, "
+            f"interval={interval_s}s, max_attempts={self._poll_max_attempts}"
+        )
+
+        still_processing: list[Judge0SubmissionResult] = []
+        for attempt in range(1, self._poll_max_attempts + 1):
+            results = await self.get_batch_submissions(tokens)
+
+            still_processing = [
+                r for r in results if r.status.id <= Judge0StatusId.PROCESSING
+            ]
+
+            has_failure = any(
+                r.status.id > Judge0StatusId.PROCESSING
+                and r.status.id != Judge0StatusId.ACCEPTED
+                for r in results
+            )
+            if has_failure:
+                logger.info(
+                    f"[judge0] Fail-fast exit after {attempt} poll(s): "
+                    f"{len(still_processing)}/{len(tokens)} still pending (not awaited)"
+                )
+                return results
+
+            if not still_processing:
+                verdicts = [r.status.description for r in results]
+                logger.info(
+                    f"[judge0] Fail-fast polling complete after {attempt} poll(s): "
+                    f"verdicts={verdicts}"
+                )
+                return results
+
+            logger.debug(
+                f"[judge0] Poll {attempt}/{self._poll_max_attempts}: "
+                f"{len(still_processing)}/{len(tokens)} still processing, "
+                f"waiting {interval_s}s"
+            )
+            await asyncio.sleep(interval_s)
+
+        logger.error(
+            f"[judge0] Fail-fast polling timed out after {self._poll_max_attempts} attempts: "
+            f"{len(still_processing)}/{len(tokens)} still processing"
+        )
+        raise Judge0TimeoutError(
+            f"Polling timed out after {self._poll_max_attempts} attempts. "
+            f"{len(still_processing)} submissions still processing."
+        )
+
     # ── Languages ─────────────────────────────────────────────────────────────
 
     async def get_languages(self) -> list[Judge0Language]:

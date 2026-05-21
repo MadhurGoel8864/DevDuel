@@ -5,7 +5,7 @@ import logging
 from fastapi import Body, Depends, Path
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from app.api.auth.dependencies import require_admin, require_organizer
+from app.api.auth.dependencies import require_admin, require_admin_or_organizer, require_organizer
 from app.api.auth.schemas import UserWithPermissions
 from app.api.problems.dao.problems import (
     BuiltinProblemDAO,
@@ -273,7 +273,7 @@ async def probe_custom_problem_handler(
 async def probe_builtin_problem_handler(
     problem_id: str = Path(..., description="Builtin Problem ID"),
     request: ValidateProblemRequest = Body(...),
-    current_user: UserWithPermissions = Depends(require_admin),
+    current_user: UserWithPermissions = Depends(require_admin_or_organizer),
     service: BuiltinProblemService = Depends(get_builtin_problem_service),
 ) -> ProbeResultResponse:
     """Run any solution against all test cases for a built-in problem without any DB writes.

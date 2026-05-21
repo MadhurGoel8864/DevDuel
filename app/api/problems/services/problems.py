@@ -49,7 +49,7 @@ from app.database.models.problems import (
     CustomProblem,
 )
 from app.services.judge0.client import Judge0Client, Judge0Error, Judge0TimeoutError
-from app.services.judge0.constants import JUDGE0_TO_VERDICT, SUPPORTED_LANGUAGES
+from app.services.judge0.constants import JUDGE0_TO_VERDICT, Judge0StatusId, SUPPORTED_LANGUAGES
 from app.services.judge0.schemas import Judge0SubmissionRequest
 from app.services.storage import storage_service
 from app.services.storage.gcs import StorageError
@@ -244,7 +244,7 @@ class BuiltinProblemService:
             raise
 
         try:
-            results = await judge0.poll_batch_until_done(tokens)
+            results = await judge0.poll_batch_fail_fast(tokens)
         except Judge0TimeoutError as e:
             logger.error(f"[builtin_probe] Judge0 polling failed: {e}")
             raise Judge0TimeoutException() from e
@@ -255,11 +255,14 @@ class BuiltinProblemService:
         passed = 0
         test_result_list = []
         for idx, (tc, result) in enumerate(zip(test_cases, results)):
+            if result.status.id <= Judge0StatusId.PROCESSING:
+                continue
+
             verdict_str = JUDGE0_TO_VERDICT.get(result.status.id, "INTERNAL_ERROR")
             memory_kb = int(result.memory) if result.memory else None
             if verdict_str == "RUNTIME_ERROR" and memory_kb is not None and memory_kb >= memory_limit:
                 verdict_str = "MEMORY_LIMIT_EXCEEDED"
-            tc_passed = result.status.id == 3
+            tc_passed = result.status.id == Judge0StatusId.ACCEPTED
             if tc_passed:
                 passed += 1
 
@@ -479,7 +482,7 @@ class CustomProblemService:
             raise
 
         try:
-            results = await judge0.poll_batch_until_done(tokens)
+            results = await judge0.poll_batch_fail_fast(tokens)
         except Judge0TimeoutError as e:
             logger.error(f"[validate] Judge0 polling failed: {e}")
             raise Judge0TimeoutException() from e
@@ -490,11 +493,14 @@ class CustomProblemService:
         passed = 0
         test_result_list = []
         for idx, (tc, result) in enumerate(zip(test_cases, results)):
+            if result.status.id <= Judge0StatusId.PROCESSING:
+                continue
+
             verdict_str = JUDGE0_TO_VERDICT.get(result.status.id, "INTERNAL_ERROR")
             memory_kb = int(result.memory) if result.memory else None
             if verdict_str == "RUNTIME_ERROR" and memory_kb is not None and memory_kb >= memory_limit:
                 verdict_str = "MEMORY_LIMIT_EXCEEDED"
-            tc_passed = result.status.id == 3  # Judge0 ACCEPTED
+            tc_passed = result.status.id == Judge0StatusId.ACCEPTED
             if tc_passed:
                 passed += 1
 
@@ -605,7 +611,7 @@ class CustomProblemService:
             raise
 
         try:
-            results = await judge0.poll_batch_until_done(tokens)
+            results = await judge0.poll_batch_fail_fast(tokens)
         except Judge0TimeoutError as e:
             logger.error(f"[probe] Judge0 polling failed: {e}")
             raise Judge0TimeoutException() from e
@@ -616,11 +622,14 @@ class CustomProblemService:
         passed = 0
         test_result_list = []
         for idx, (tc, result) in enumerate(zip(test_cases, results)):
+            if result.status.id <= Judge0StatusId.PROCESSING:
+                continue
+
             verdict_str = JUDGE0_TO_VERDICT.get(result.status.id, "INTERNAL_ERROR")
             memory_kb = int(result.memory) if result.memory else None
             if verdict_str == "RUNTIME_ERROR" and memory_kb is not None and memory_kb >= memory_limit:
                 verdict_str = "MEMORY_LIMIT_EXCEEDED"
-            tc_passed = result.status.id == 3
+            tc_passed = result.status.id == Judge0StatusId.ACCEPTED
             if tc_passed:
                 passed += 1
 

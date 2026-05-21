@@ -196,6 +196,22 @@ async def require_admin(
     return current_user
 
 
+async def require_admin_or_organizer(
+    current_user: UserWithPermissions = Depends(get_current_user),
+) -> UserWithPermissions:
+    """
+    Dependency that allows either a platform admin or an organizer.
+
+    Raises:
+        ForbiddenException: If the user is neither admin nor organizer.
+    """
+    if current_user.role != UserRole.ADMIN and not current_user.is_organizer:
+        raise ForbiddenException(
+            message="Only admins or organizers are allowed to perform this action"
+        )
+    return current_user
+
+
 async def get_logout_tokens(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
