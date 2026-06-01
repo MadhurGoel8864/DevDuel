@@ -4,6 +4,10 @@
 
 Live at [devduel.site](https://devduel.site)
 
+<p align="center">
+  <img src="docs/images/langinh_page.png" alt="DevDuel landing page — One bids. One codes." width="900">
+</p>
+
 ---
 
 ## What is DevDuel?
@@ -26,6 +30,69 @@ DevDuel is a real-time competitive programming platform built around a unique tw
 - **Auth** — Email/password with OTP verification + Google OAuth; JWT access/refresh tokens with Redis blacklisting
 - **Rate limiting** — Per-IP limits on auth endpoints; per-user burst and sustained limits on code submissions
 - **Organizer tools** — Create contests, manage problems, and monitor submissions
+
+---
+
+## Screenshots
+
+### Your dashboard
+
+The home base — jump into a contest, spin up a team, or open organizer tools.
+
+<p align="center">
+  <img src="docs/images/dahboard.png" alt="Player dashboard with quick actions" width="900">
+</p>
+
+### The auction
+
+Bidders compete for problems in real time. Organizers run the room from a live control panel.
+
+<p align="center">
+  <img src="docs/images/Bidder_panel.png" alt="Live auction arena — placing a bid" width="900">
+  <br><em>Bidder — Live Auction Arena</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/organizer_panel.png" alt="Organizer auction control room" width="900">
+  <br><em>Organizer — Auction Control Room</em>
+</p>
+
+### Coding & judging
+
+Coders work through the problems their team won, then submit against hidden test cases — judged synchronously, no client-side polling.
+
+<p align="center">
+  <img src="docs/images/Coder_workbench.png" alt="Coder's workbench with assigned problems" width="900">
+  <br><em>Coder's Workbench — assigned problems</em>
+</p>
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/images/Code_submission.png" alt="Accepted submission — all test cases passed"><br><em>Accepted — 20/20 test cases passed</em></td>
+<td width="50%" align="center"><img src="docs/images/wrong_submission.png" alt="Wrong answer verdict"><br><em>Wrong Answer — sample tests failed</em></td>
+</tr>
+</table>
+
+### Results
+
+<p align="center">
+  <img src="docs/images/Leaderboard.png" alt="Hall of Fame leaderboard" width="900">
+  <br><em>Hall of Fame — live standings by points and currency</em>
+</p>
+
+### Organizer tools
+
+Browse the built-in problem library, author custom problems, and curate the problem set for each contest.
+
+<p align="center">
+  <img src="docs/images/problem_library.png" alt="Organizer panel with personal problem library" width="900">
+  <br><em>Organizer Panel — your problems and contest portfolio</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/manage_problems.png" alt="Manage problems — contest problems and library" width="900">
+  <br><em>Manage Problems — add problems to a contest from the library</em>
+</p>
 
 ---
 
