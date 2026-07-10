@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: str = Field(default="")
     OTP_EXPIRE_SECONDS: int = 300  # 5 minutes
     REDIS_URL: str = "redis://localhost:6379/0"
+    # ARQ builds its own RedisSettings from the discrete host/port/db/password
+    # fields above rather than parsing REDIS_URL, so TLS-only hosted Redis
+    # (e.g. Upstash) needs this set explicitly — see app/core/arq_pool.py.
+    REDIS_SSL: bool = Field(default=False)
     BIDDING_REDIS_PUBSUB_ENABLED: bool = Field(default=False)
 
     # Minimum milliseconds between consecutive bids from the same user on the same auction.

@@ -83,9 +83,10 @@ def create_app() -> FastAPI:
     )
     # Must be outermost (added last) so request.client is rewritten to the real
     # client IP before any rate-limiting dependency or logging reads it.
-    # Trusting only 127.0.0.1 (nginx on same VM) prevents IP spoofing via
-    # forged X-Forwarded-For headers from external clients.
-    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="127.0.0.1")
+    # Trusting "*" is safe here: the app runs behind a managed platform proxy
+    # (not a fixed loopback address like the old same-VM nginx setup), and
+    # port 8150 is never publicly reachable — only that proxy can reach it.
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
     # Register routers
     app.include_router(api_router)
